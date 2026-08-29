@@ -53,6 +53,11 @@ Reached when a stranger can be handed the phone and the unit and walk that loop.
   — motion now OR's ECG baseline wander with PPG perfusion instability; both thresholds
   PROVISIONAL pending real disturbed captures (ticket 003). Unblocks firmware's BLE
   frame layout. `6e3381c`.
+- [005 — Refit the beat-timing thresholds](tickets/005-refit-beat-timing.md) — rules
+  detector refit against AFDB (5-fold CV: Sp 0.702→0.911), confirmed on an independent
+  dataset (CinC 2017: Sp 0.497→0.848). Surfaced that the deployed OR-combination is
+  bottlenecked by the CNN's own Sp, not the rules detector — flagged for ticket 007.
+  `18ac3fa`.
 
 ## Not yet specified
 
