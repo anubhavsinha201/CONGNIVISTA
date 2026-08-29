@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ArogyaX — PHC referral queue</title>
+<!--
+  Static PHC dashboard: referral queue + risk map.
+
+  No CDN, no external stylesheet, no map tile server. A PHC's connectivity is
+  not something to assume, and a dashboard that needs the open internet to
+  render is a dashboard that is blank on the day it matters. The map is an SVG
+  scatter of the screening coordinates rather than Leaflet for that reason —
+  it shows where risk clusters, which is the actual question, without a tile
+  request.
+
+  Serve with:  python -m http.server 8080
+  Needs arogyax-sync on :8787 (cd server && DEMO=1 npm start).
+-->
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --ink: #1b1f24;
+    --muted: #667085;
+    --line: #e3e6ea;
+    --red: #c9382e;
+    --amber: #c07a10;
+    --green: #2f7d4f;
+    --retake: #7a8290;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14171b; --panel: #1c2026; --ink: #e8eaed; --muted: #98a2b3;
+      --line: #2c323a; --red: #ef5a4c; --amber: #e0a63a; --green: #4cb87a;
+      --retake: #8b94a1;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  header {
+    padding: 18px 24px; border-bottom: 1px solid var(--line);
+    background: var(--panel); display: flex; align-items: baseline;
+    gap: 16px; flex-wrap: wrap;
+  }
+  h1 { font-size: 18px; margin: 0; font-weight: 650; letter-spacing: -0.01em; }
+  .sub { color: var(--muted); font-size: 13px; }
+  .grow { flex: 1; }
+  main { padding: 24px; display: grid; gap: 24px; grid-template-columns: 1fr; max-width: 1400px; }
+  @media (min-width: 1100px) { main { grid-template-columns: 1.6fr 1fr; } }
+  .panel {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 10px; overflow: hidden;
+  }
+  .panel h2 {
+    margin: 0; padding: 14px 16px; font-size: 13px; font-weight: 650;
+    text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted);
+    border-bottom: 1px solid var(--line);
+  }
+  .counts { display: flex; gap: 8px; flex-wrap: wrap; }
+  .chip {
+    font-size: 12px; font-weight: 650; padding: 3px 9px; border-radius: 999px;
+    border: 1px solid currentColor;
+  }
+  .t-RED { color: var(--red); }
+  .t-AMBER { color: var(--amber); }
+  .t-GREEN { color: var(--green); }
+  .t-RETAKE { color: var(--retake); }
+  .scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th {
+    text-align: left; font-size: 11px; text-transform: uppercase;
+    letter-spacing: 0.05em; color: var(--muted); font-weight: 600;
+    padding: 9px 12px; border-bottom: 1px solid var(--line); white-space: nowrap;
+  }
+  td { padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  tr:last-child td { border-bottom: 0; }
+  .tier {
+    font-weight: 700; font-size: 12px; letter-spacing: 0.04em;
+    padding: 3px 9px; border-radius: 5px; border: 1px solid currentColor;
+    display: inline-block;
+  }
+  code { font: 12px ui-monospace, "SF Mono", Menlo, Consolas, monospace; color: var(--muted); }
+  .evidence { font-size: 12px; color: var(--muted); }
+  select, button {
+    font: inherit; font-size: 13px; padding: 5px 9px; border-radius: 6px;
+    border: 1px solid var(--line); background: var(--bg); color: var(--ink);
+  }
+  button { cursor: pointer; }
+  button:hover { border-color: var(--muted); }
+  .state { font-size: 12px; color: var(--muted); }
+  .empty { padding: 32px 16px; text-align: center; color: var(--muted); }
+  .err {
+    margin: 0 24px; padding: 12px 14px; border-radius: 8px;
+    border: 1px solid var(--red); color: var(--red); font-size: 13px;
+  }
+  svg { display: block; width: 100%; height: auto; }
+  .note { padding: 12px 16px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--line); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>ArogyaX — PHC referral queue</h1>
+  <span class="sub" id="counts"></span>
+  <span class="grow"></span>
+  <label class="sub">PHC
+    <select id="phc">
+      <option value="phc-042">phc-042</option>
+      <option value="">all</option>
+    </select>
+  </label>
+  <button id="refresh">Refresh</button>
+  <span class="state" id="status">…</span>
+</header>
+
+<div id="error" class="err" hidden></div>
+
+<main>
+  <section class="panel">
+    <h2>Referrals — highest urgency first</h2>
+    <div class="scroll"><table>
+      <thead><tr>
+        <th>Urgency</th><th>Patient ref</th><th>Screened</th>
+        <th>Worker</th><th>Evidence</th><th>Follow-up</th>
+      </tr></thead>
+      <tbody id="rows"></tbody>
+    </table></div>
+    <div id="empty" class="empty" hidden>Nothing queued.</div>
+    <p class="note">
+      Urgency tiers only. This is a screening and triage layer — it does not
+      diagnose, and no result here is a clinical finding.
+    </p>
+  </section>
+
+  <section class="panel">
+    <h2>Where screenings cluster</h2>
+    <svg id="map" viewBox="0 0 400 320" role="img"
+         aria-label="Scatter of screening locations coloured by urgency tier"></svg>
+    <p class="note" id="mapnote"></p>
+  </section>
+</main>
+
+<script>
+const API = location.hostname === 'localhost' || location.hostname === '127.0.0.1'
+  ? 'http://127.0.0.1:8787'
+  : `${location.protocol}//${location.hostname}:8787`;
+
+// Mirrors the referralState enum in contracts/record.schema.json. A closed
+// vocabulary, deliberately: there is no free-text note anywhere in this system.
+const FOLLOW_UP = {
+  none: 'Not yet actioned',
+  acknowledged: 'Acknowledged',
+  patient_contacted: 'Patient contacted',
+  visit_scheduled: 'Visit scheduled',
+  seen_at_phc: 'Seen at PHC',
+  closed: 'Closed',
+};
+
+const TIERS = ['RED', 'AMBER', 'GREEN', 'RETAKE'];
+const $ = (id) => document.getElementById(id);
+
+const fmtTime = (iso) => {
+  const d = new Date(iso);
+  return Number.isNaN(+d) ? iso : d.toLocaleString([], {
+    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+  });
+};
+
+/**
+ * Why this referral is at the tier it is.
+ *
+ * Numbers and detector names only. The v2 schema added ppgCorroboration
+ * precisely so an escalated RED can account for itself here instead of
+ * appearing without explanation.
+ */
+function evidence(r) {
+  const bits = [];
+  if (r.tier === 'RETAKE') {
+    bits.push('signal not usable');
+    if (r.leadOffDetected) bits.push('electrode detached');
+    else if (r.motionRejected) bits.push('movement');
+    else if (r.sqiScore != null) bits.push(`quality ${r.sqiScore.toFixed(2)}`);
+    return bits.join(' · ');
+  }
+  if (r.meanHr != null) bits.push(`${Math.round(r.meanHr)} bpm`);
+  if (r.rrIrregularityScore != null) bits.push(`irregularity ${r.rrIrregularityScore.toFixed(2)}`);
+  if (r.cnnScore != null) bits.push(`model ${r.cnnScore.toFixed(2)}`);
+  if (r.fusionValid && r.pulseDeficitBpm != null) {
+    bits.push(`pulse deficit ${r.pulseDeficitBpm.toFixed(1)} bpm`);
+  }
+  if (r.ppgCorroboration === 'pulseDeficit') bits.push('corroborated by pulse');
+  else if (r.ppgCorroboration === 'nonPerfusingBeats') bits.push('non-perfusing beats');
+  if (r.decidedBy) bits.push(`via ${r.decidedBy}`);
+  return bits.join(' · ');
+}
+
+function renderCounts(records) {
+  const n = Object.fromEntries(TIERS.map((t) => [t, 0]));
+  for (const r of records) if (r.tier in n) n[r.tier]++;
+  $('counts').innerHTML = `<span class="counts">` +
+    TIERS.map((t) => `<span class="chip t-${t}">${t} ${n[t]}</span>`).join('') +
+    `</span>`;
+}
+
+function renderRows(records) {
+  const tbody = $('rows');
+  tbody.replaceChildren();
+  $('empty').hidden = records.length > 0;
+
+  for (const r of records) {
+    const tr = document.createElement('tr');
+
+    const td = (html) => {
+      const c = document.createElement('td');
+      c.innerHTML = html;
+      tr.appendChild(c);
+      return c;
+    };
+
+    td(`<span class="tier t-${r.tier}">${r.tier}</span>`);
+    td(`<code>${r.patientPseudoId ?? '—'}</code>`);
+    td(fmtTime(r.capturedAt));
+    td(`<code>${r.whvId ?? '—'}</code>`);
+    td(`<span class="evidence">${evidence(r)}</span>`);
+
+    // Follow-up control. The only write this dashboard performs.
+    const cell = td('');
+    const sel = document.createElement('select');
+    for (const [value, label] of Object.entries(FOLLOW_UP)) {
+      const o = document.createElement('option');
+      o.value = value;
+      o.textContent = label;
+      if ((r.referralState ?? 'none') === value) o.selected = true;
+      sel.appendChild(o);
+    }
+    sel.addEventListener('change', () => ack(r.recordId, sel.value, sel));
+    cell.appendChild(sel);
+
+    tbody.appendChild(tr);
+  }
+}
+
+/**
+ * Plots screenings by coordinate.
+ *
+ * Deliberately not a street map. The question a PHC asks of this panel is
+ * "where are the REDs bunching", and relative position answers it; a tile
+ * layer would add a network dependency and a false impression of precision
+ * that a phone GPS fix under a tin roof does not support.
+ */
+function renderMap(records) {
+  const svg = $('map');
+  const pts = records.filter((r) => typeof r.lat === 'number' && typeof r.lon === 'number');
+  svg.replaceChildren();
+
+  if (pts.length === 0) {
+    $('mapnote').textContent = 'No screening in this queue carried a GPS fix.';
+    return;
+  }
+
+  const lats = pts.map((p) => p.lat);
+  const lons = pts.map((p) => p.lon);
+  const pad = 0.004;
+  const [y0, y1] = [Math.min(...lats) - pad, Math.max(...lats) + pad];
+  const [x0, x1] = [Math.min(...lons) - pad, Math.max(...lons) + pad];
+
+  const X = (lon) => 30 + ((lon - x0) / (x1 - x0 || 1)) * 340;
+  const Y = (lat) => 290 - ((lat - y0) / (y1 - y0 || 1)) * 260;
+
+  const ns = 'http://www.w3.org/2000/svg';
+  const el = (name, attrs) => {
+    const e = document.createElementNS(ns, name);
+    for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+    return e;
+  };
+
+  for (let i = 0; i <= 4; i++) {
+    const y = 30 + i * 65;
+    svg.appendChild(el('line', {
+      x1: 30, x2: 370, y1: y, y2: y,
+      stroke: 'currentColor', 'stroke-opacity': 0.08,
+    }));
+  }
+
+  // RED drawn last so a cluster never hides the referrals that matter.
+  const order = { RETAKE: 0, GREEN: 1, AMBER: 2, RED: 3 };
+  for (const p of [...pts].sort((a, b) => (order[a.tier] ?? 0) - (order[b.tier] ?? 0))) {
+    const c = el('circle', {
+      cx: X(p.lon).toFixed(1), cy: Y(p.lat).toFixed(1),
+      r: p.tier === 'RED' ? 7 : 5,
+      fill: `var(--${p.tier.toLowerCase()})`,
+      'fill-opacity': 0.75,
+      stroke: `var(--${p.tier.toLowerCase()})`,
+    });
+    c.appendChild(el('title', {})).textContent =
+      `${p.tier} · ${p.patientPseudoId} · ${fmtTime(p.capturedAt)}`;
+    svg.appendChild(c);
+  }
+
+  const spanKm = (y1 - y0) * 111;
+  $('mapnote').textContent =
+    `${pts.length} of ${records.length} screenings carried a GPS fix. ` +
+    `Vertical span roughly ${spanKm.toFixed(1)} km. Relative positions only — not a street map.`;
+}
+
+async function ack(recordId, referralState, control) {
+  control.disabled = true;
+  try {
+    const res = await fetch(`${API}/v1/acks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ recordId, referralState, referralUpdatedBy: 'phc-desk' }),
+    });
+    if (!res.ok) throw new Error(`ack rejected (${res.status})`);
+    $('status').textContent = `follow-up saved ${new Date().toLocaleTimeString()}`;
+  } catch (e) {
+    showError(`Could not save follow-up: ${e.message}`);
+  } finally {
+    control.disabled = false;
+  }
+}
+
+function showError(msg) {
+  const box = $('error');
+  box.textContent = msg;
+  box.hidden = false;
+}
+
+async function load() {
+  const phcId = $('phc').value;
+  $('status').textContent = 'loading…';
+  try {
+    const url = new URL(`${API}/v1/queue`);
+    if (phcId) url.searchParams.set('phcId', phcId);
+
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`queue request failed (${res.status})`);
+
+    const { records } = await res.json();
+    renderCounts(records);
+    renderRows(records);
+    renderMap(records);
+
+    $('error').hidden = true;
+    $('status').textContent = `updated ${new Date().toLocaleTimeString()}`;
+  } catch (e) {
+    showError(
+      `${e.message}. Is arogyax-sync running? ` +
+      `cd server && DEMO=1 npm start  (expected at ${API})`,
+    );
+    $('status').textContent = 'offline';
+  }
+}
+
+$('refresh').addEventListener('click', load);
+$('phc').addEventListener('change', load);
+load();
+setInterval(load, 15000);
+</script>
+</body>
+</html>

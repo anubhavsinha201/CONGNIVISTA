@@ -1,0 +1,27 @@
+# Datasets — large, downloadable from PhysioNet, never belongs in git history.
+# ml/prepare_cinc2017.py and the wsl setup notes describe how to refetch them.
+ml/data/
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Flutter/Dart build output
+app/.dart_tool/
+app/.flutter-plugin-dependencies
+app/build/
+app/.packages
+app/pubspec.lock
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# OS cruft
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/

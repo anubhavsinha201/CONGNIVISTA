@@ -1,0 +1,56 @@
+{
+ "split": "CinC 2017, record-disjoint",
+ "windows": 1364,
+ "af_windows": 124,
+ "test_prevalence": 0.09090909090909091,
+ "field_prevalence": 0.051,
+ "auc_fp32": 0.9444133714880334,
+ "auc_int8": 0.9302029136316339,
+ "prauc_int8": 0.6619403103686907,
+ "rules": {
+  "tp": 119,
+  "fp": 624,
+  "tn": 616,
+  "fn": 5,
+  "sensitivity": 0.9596774193548387,
+  "specificity": 0.4967741935483871,
+  "ppv": 0.1601615074024226,
+  "npv": 0.9919484702093397,
+  "f1": 0.27450980392156865,
+  "balanced_accuracy": 0.728225806451613,
+  "accuracy": 0.5388563049853372
+ },
+ "cnn": {
+  "tp": 114,
+  "fp": 236,
+  "tn": 1004,
+  "fn": 10,
+  "sensitivity": 0.9193548387096774,
+  "specificity": 0.8096774193548387,
+  "ppv": 0.32571428571428573,
+  "npv": 0.9901380670611439,
+  "f1": 0.4810126582278481,
+  "balanced_accuracy": 0.864516129032258,
+  "accuracy": 0.8196480938416423
+ },
+ "rules_or_cnn": {
+  "tp": 124,
+  "fp": 708,
+  "tn": 532,
+  "fn": 0,
+  "sensitivity": 1.0,
+  "specificity": 0.4290322580645161,
+  "ppv": 0.14903846153846154,
+  "npv": 1.0,
+  "f1": 0.2594142259414226,
+  "balanced_accuracy": 0.714516129032258,
+  "accuracy": 0.4809384164222874
+ },
+ "af_caught_by_cnn_alone": 5,
+ "af_caught_by_rules_alone": 10,
+ "detector_agreement": 0.5813782991202346,
+ "latency_int8_ms": {
+  "median_ms": 0.1010699999994813,
+  "p95_ms": 0.27307499999977836
+ }
+}

@@ -1,0 +1,21 @@
+# Local MongoDB for the sync service.
+#
+# The demo must not depend on someone else's uptime, so the whole stack runs
+# offline: this container, `npm start`, and `python -m http.server` in
+# dashboard/. Point MONGO_URI at Atlas when you want the cloud instead.
+services:
+  mongo:
+    image: mongo:7
+    container_name: arogyax-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - arogyax-mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  arogyax-mongo-data:

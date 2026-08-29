@@ -1,0 +1,306 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://arogyax.local/contracts/record.schema.json",
+ "title": "ArogyaX screening record",
+ "description": "One doorstep screening. Shared verbatim by the app's local sqlite store, the sync payload, and the PHC dashboard. Locked at H0 as v1; amended to v2 to give the PPG/fusion layer and the PHC referral acknowledgement a home. See contracts/sync.md for the wire protocol.",
+ "type": "object",
+ "required": [
+  "recordId",
+  "schemaVersion",
+  "patientPseudoId",
+  "whvId",
+  "capturedAt",
+  "tier",
+  "modelVersion",
+  "syncState"
+ ],
+ "additionalProperties": false,
+ "properties": {
+  "recordId": {
+   "type": "string",
+   "description": "UUID v4 generated on the phone. The sync is idempotent on this key, so a retried upload can never create a duplicate referral.",
+   "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+  },
+  "schemaVersion": {
+   "type": "integer",
+   "const": 2,
+   "description": "v1 -> v2 added the PPG/fusion evidence fields and the referral acknowledgement block. Every added field is nullable, so a v1 record is a valid v2 record once this integer is bumped."
+  },
+  "patientPseudoId": {
+   "type": "string",
+   "description": "Salted hash of the MTM patient identifier. No name, no phone number, no Aadhaar ever leaves the device. The PHC re-identifies from its own MTM roll.",
+   "minLength": 8
+  },
+  "whvId": {
+   "type": "string",
+   "description": "Women Health Volunteer identifier"
+  },
+  "phcId": {
+   "type": "string",
+   "description": "Destination Primary Health Centre"
+  },
+  "capturedAt": {
+   "type": "string",
+   "format": "date-time",
+   "description": "ISO 8601 with timezone offset"
+  },
+  "lat": {
+   "type": [
+    "number",
+    "null"
+   ],
+   "minimum": -90,
+   "maximum": 90
+  },
+  "lon": {
+   "type": [
+    "number",
+    "null"
+   ],
+   "minimum": -180,
+   "maximum": 180
+  },
+  "locationAccuracyM": {
+   "type": [
+    "number",
+    "null"
+   ],
+   "description": "null when GPS was unavailable; the record is still valid"
+  },
+  "ppgResult": {
+   "type": [
+    "string",
+    "null"
+   ],
+   "enum": [
+    "regular",
+    "irregular",
+    "unclear",
+    "skipped",
+    null
+   ],
+   "description": "Camera pre-screen outcome. 'irregular' or 'unclear' escalates to ECG."
+  },
+  "ppgMeanHr": {
+   "type": [
+    "number",
+    "null"
+   ]
+  },
+  "ppgIrregularityScore": {
+   "type": [
+    "number",
+    "null"
+   ],
+   "minimum": 0,
+   "maximum": 1,
+   "description": "Contact-PPG interval irregularity, on the same scale as rrIrregularityScore by construction (both come from RrAnalyser)."
+  },
+  "ppgPerfusionIndex": {
+   "type": [
+    "number",
+    "null"
+   ],
+   "description": "Perfusion index (%). Below PpgAnalyser.kPerfusionGate the PPG was discarded and every fusion field below is null."
+  },
+  "ecgDurationSec": {
+   "type": "number",
+   "minimum": 0
+  },
+  "sqiScore": {
+   "type": "number",
+   "minimum": 0,
+   "maximum": 1,
+   "description": "0-1 signal quality. Below the gate the record is RETAKE and carries no scores."
+  },
+  "motionRejected": {
+   "type": "boolean",
+   "description": "true if the motion gate or a BLE seq gap invalidated the window"
+  },
+  "leadOffDetected": {
+   "type": "boolean"
+  },
+  "meanHr": {
+   "type": [
+    "number",
+    "null"
+   ]
+  },
+  "rrIntervalCount": {
+   "type": [
+    "integer",
+    "null"
+   ]
+  },
+  "rrIrregularityScore": {
+   "type": [
+    "number",
+    "null"
+   ],
+   "minimum": 0,
+   "maximum": 1,
+   "description": "Rule-based RR-irregularity output. Always present when the signal passed the gates."
+  },
+  "cnnScore": {
+   "type": [
+    "number",
+    "null"
+   ],
+   "minimum": 0,
+   "maximum": 1,
+   "description": "INT8 CNN output. null when the CNN did not run."
+  },
+  "decidedBy": {
+   "type": "string",
+   "enum": [
+    "rules",
+    "cnn",
+    "rules+cnn",
+    "gate"
+   ],
+   "description": "Which path produced the tier. 'gate' means RETAKE."
+  },
+  "pulseDeficitBpm": {
+   "type": [
+    "number",
+    "null"
+   ],
+   "description": "ECG heart rate minus PPG pulse rate over the same window. A beat too early to fill the ventricle never reaches the finger, so the electrical rate exceeds the mechanical one. Null unless ECG and PPG were captured simultaneously on the ESP32 clock."
+  },
+  "perfusedBeatFraction": {
+   "type": [
+    "number",
+    "null"
+   ],
+   "minimum": 0,
+   "maximum": 1,
+   "description": "Fraction of R peaks followed by a pulse inside the transit-time window."
+  },
+  "nonPerfusingBeats": {
+   "type": [
+    "integer",
+    "null"
+   ],
+   "minimum": 0
+  },
+  "medianPttMs": {
+   "type": [
+    "number",
+    "null"
+   ],
+   "description": "Median pulse transit time across matched beats. Recorded, not used in the decision."
+  },
+  "fusionValid": {
+   "type": "boolean",
+   "default": false,
+   "description": "False when the two captures were not simultaneous or either side was unusable. When false, every fusion field above is meaningless and must be ignored."
+  },
+  "fusionImplausible": {
+   "type": "boolean",
+   "default": false,
+   "description": "The deficit came out negative, which is physiologically impossible and indicts the R-peak detector rather than the patient."
+  },
+  "ppgCorroboration": {
+   "type": [
+    "string",
+    "null"
+   ],
+   "enum": [
+    "none",
+    "unusable",
+    "agreed",
+    "pulseDeficit",
+    "nonPerfusingBeats",
+    null
+   ],
+   "description": "What the contact PPG contributed. Mirrors PpgCorroboration in app/lib/core/policy.dart. This is the field that makes an AMBER-to-RED escalation auditable instead of mysterious: without it a PHC sees a RED it cannot explain."
+  },
+  "tier": {
+   "type": "string",
+   "enum": [
+    "RED",
+    "AMBER",
+    "GREEN",
+    "RETAKE"
+   ]
+  },
+  "modelVersion": {
+   "type": "string",
+   "description": "e.g. 'rules-1.0' or 'af-cnn-int8-1.0+cal2'. The calibration used is part of the version, because the threshold is part of the model."
+  },
+  "ecgWaveformRef": {
+   "type": [
+    "string",
+    "null"
+   ],
+   "description": "Local file path to the raw trace. Not uploaded in the hackathon build."
+  },
+  "syncState": {
+   "type": "string",
+   "enum": [
+    "pending",
+    "synced",
+    "failed"
+   ],
+   "description": "Device-owned. The upload is only marked 'synced' on a per-record server ack, never on an HTTP 200 for the enclosing batch."
+  },
+  "syncedAt": {
+   "type": [
+    "string",
+    "null"
+   ],
+   "format": "date-time"
+  },
+  "referralState": {
+   "type": [
+    "string",
+    "null"
+   ],
+   "enum": [
+    "none",
+    "acknowledged",
+    "patient_contacted",
+    "visit_scheduled",
+    "seen_at_phc",
+    "closed",
+    null
+   ],
+   "description": "SERVER-OWNED. Set by the PHC dashboard and pulled back to the worker's phone, so the WHV can see which of her referrals were acted on. A closed enum rather than a free-text note on purpose: worker-facing text must come from the static string table (CLAUDE.md non-negotiable 6), and an unreviewed free-text channel is exactly how a diagnosis word would reach the worker's screen (non-negotiable 1). The device must never include this field in an upload."
+  },
+  "referralUpdatedAt": {
+   "type": [
+    "string",
+    "null"
+   ],
+   "format": "date-time"
+  },
+  "referralUpdatedBy": {
+   "type": [
+    "string",
+    "null"
+   ],
+   "description": "PHC staff identifier. Not a patient identifier and not free text."
+  },
+  "clinicianOutcome": {
+   "type": [
+    "string",
+    "null"
+   ],
+   "enum": [
+    "confirmed",
+    "not_confirmed",
+    "inconclusive",
+    null
+   ],
+   "description": "SERVER-OWNED. What the PHC clinician found after seeing a referred patient. Set only by the dashboard and pulled back through GET /v1/acks. A closed enum, never free text and never a condition name: this is the only channel by which a clinical finding reaches a worker's phone, and an unreviewed text field here is exactly how the words this product must never display would get onto her screen. 'confirmed' means the clinician confirmed the rhythm finding the referral was raised for; it is the training label that makes model improvement possible at all, since referralState only records process."
+  },
+  "clinicianOutcomeAt": {
+   "type": [
+    "string",
+    "null"
+   ],
+   "format": "date-time",
+   "description": "SERVER-OWNED. When clinicianOutcome was set."
+  }
+ }
+}

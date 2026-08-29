@@ -1,0 +1,48 @@
+name: arogyax
+description: >-
+  Offline atrial-fibrillation screening and triage for the Makkalai Thedi
+  Maruthuvam doorstep health scheme. Screening layer only, never a diagnosis.
+publish_to: none
+version: 0.1.0
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+
+# STARTING POINT, owned by track B.
+#
+# Track C's DSP layer (lib/signal/, lib/core/policy.dart) deliberately depends
+# on nothing outside dart:math and dart:typed_data, so it compiles and its
+# tests run without a device, a Bluetooth stack, or a Flutter engine.
+# Keep it that way — it is what makes the decision path testable.
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # ---- Offline record queue + opportunistic sync (lib/data/) --------------
+  # See contracts/sync.md. None of this is reachable from lib/signal/ or
+  # lib/core/policy.dart; the dependency points one way only.
+  sqlite3: ^2.4.0
+  sqlcipher_flutter_libs: ^0.6.0   # bundles SQLCipher; encryption at rest
+  path_provider: ^2.1.4
+  flutter_secure_storage: ^9.2.2   # DB key + device token + deployment salt
+  connectivity_plus: ^6.0.5
+  http: ^1.2.2
+  crypto: ^3.0.5                   # HMAC-SHA256 for patientPseudoId
+
+  # Track B adds as needed:
+  #   flutter_blue_plus  - BLE transport
+  #   camera             - PPG pre-screen
+  #   flutter_tts        - Tamil voice playback
+  #   geolocator         - geo-tagging
+  #   tflite_flutter     - INT8 model (SHIPPED: assets/models/af_int8.tflite)
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/replay/    # bundled CSV traces for ReplaySource
+    - assets/models/    # af_int8.tflite (seed 0, calibrated 2026-08-28)
