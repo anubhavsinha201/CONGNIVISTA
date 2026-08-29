@@ -34,7 +34,8 @@ Reached when a stranger can be handed the phone and the unit and walk that loop.
 |---|---|
 | Built and verified | Signal chain, SQI, PPG + fusion, policy, patient history, INT8-calibrated model (83 KB), encrypted queue, sync engine, sync service (33 tests), read-only dashboard |
 | **Never compiled** | All ~3,900 lines of Dart. No Dart SDK has ever touched it |
-| Absent | `main.dart`, any UI, BLE, `SignalSource`, Tamil strings, `firmware/`, replay traces |
+| Absent | `main.dart`, any UI, BLE, `SignalSource`, Tamil strings, replay traces |
+| **Firmware drafted, uncompiled** | `firmware/` has a full `main.cpp` against `ble.md`/`ppg.md` now, but no PlatformIO here to build it and no Python-mirror equivalent to verify it against — see ticket 013 |
 | Toolchain | **No Flutter, Dart, adb, Android SDK, or PlatformIO installed.** Node only |
 | Hardware | ESP32 + AD8232 + MAX30102. Breadboarded, **never produced a clean trace** |
 | **MPU-6050 dropped** | The motion gate loses its sensor. Motion becomes **inferred** from ECG baseline wander and PPG perfusion instability — both measured on the patient, unlike the phone's accelerometer. 19 files reference it as of charting |
@@ -67,6 +68,13 @@ Reached when a stranger can be handed the phone and the unit and walk that loop.
   result). The CNN's own Sp 0.460 bottleneck flagged by ticket 005 was deliberately
   **not** touched here — a separate, already-documented problem, not folded into this
   ticket. `31b1db8`.
+- [013 — ESP32 firmware](tickets/013-esp32-firmware.md) — **not closed, code only.**
+  `firmware/src/main.cpp` written against `ble.md`/`ppg.md`'s locked frame formats:
+  timer-driven 250 Hz ECG + 100 Hz PPG sampling via `esp_timer` task-dispatch callbacks
+  (not a hardware ISR — chosen so the sample read itself stays jitter-free even while
+  `loop()` is mid-`notify()`), double-buffered handoff to BLE. No PlatformIO here to
+  compile it and no Python mirror to check it against, unlike every other ticket in this
+  tracker — the ticket file lists five specific things to verify first. `6ebf74e`.
 
 ## Not yet specified
 
