@@ -34,7 +34,8 @@ K_CNN_VERSION = "af-cnn-int8-1.0+cal1"
 class Tier(Enum):
     RETAKE = "retake"
     RED = "red"
-    AMBER = "amber"
+    ORANGE = "orange"
+    YELLOW = "yellow"
     GREEN = "green"
 
 
@@ -43,6 +44,7 @@ class DecidedBy(Enum):
     RULES = "rules"
     CNN = "cnn"
     RULES_AND_CNN = "rules+cnn"
+    HISTORY = "history"
 
 
 class RetakeReason(Enum):
@@ -62,7 +64,8 @@ class Decision:
 
 
 def decide(sqi=0.9, motion=False, lead_off=False, gap=False, rr_count=40,
-           hr=72.0, irregularity=0.1, cnn=None, sqi_hint=None) -> Decision:
+           hr=72.0, irregularity=0.1, cnn=None, sqi_hint=None,
+           history_intermittent=False, history_persistent=False) -> Decision:
     # 1. Gates, absolute and first.
     if lead_off:
         return Decision(Tier.RETAKE, DecidedBy.GATE, RetakeReason.ELECTRODE_DETACHED,
@@ -95,15 +98,27 @@ def decide(sqi=0.9, motion=False, lead_off=False, gap=False, rr_count=40,
         by = DecidedBy.RULES
 
     if not (rules_flag or cnn_flag):
+        # History gets a narrow exception: intermittent means flagged on some
+        # visits and clean on others, so a clean window here is not the same
+        # evidence a clean window with no history at all would be. Persistent
+        # does not get this exception - see contracts/tiers.md section 2.
+        if history_intermittent:
+            return Decision(Tier.ORANGE, DecidedBy.HISTORY)
         return Decision(Tier.GREEN, by)
 
     # 3. Rate decides urgency, not whether.
     rate_abnormal = hr < K_HR_LOW or hr > K_HR_HIGH
-    return Decision(Tier.RED if rate_abnormal else Tier.AMBER, by)
+    if rate_abnormal:
+        return Decision(Tier.RED, by)
+
+    # Irregular, rate normal: ORANGE if this fits a pattern already seen
+    # across visits, YELLOW if it is the first time.
+    repeated = history_intermittent or history_persistent
+    return Decision(Tier.ORANGE if repeated else Tier.YELLOW, by)
 
 
 def version_for(by: DecidedBy) -> str:
-    if by in (DecidedBy.GATE, DecidedBy.RULES):
+    if by in (DecidedBy.GATE, DecidedBy.RULES, DecidedBy.HISTORY):
         return K_RULES_VERSION
     return f"{K_RULES_VERSION}+{K_CNN_VERSION}"
 
@@ -142,8 +157,8 @@ def main():
     print("\nTier table (contracts/tiers.md)")
     check("regular, normal rate -> GREEN",
           decide(irregularity=0.2, hr=72).tier is Tier.GREEN)
-    check("irregular, normal rate -> AMBER",
-          decide(irregularity=0.8, hr=72).tier is Tier.AMBER)
+    check("irregular, normal rate, first time -> YELLOW",
+          decide(irregularity=0.8, hr=72).tier is Tier.YELLOW)
     check("irregular, tachycardic -> RED",
           decide(irregularity=0.8, hr=140).tier is Tier.RED)
     check("irregular, bradycardic -> RED",
@@ -151,11 +166,30 @@ def main():
     check("abnormal rate alone does NOT escalate",
           decide(irregularity=0.2, hr=150).tier is Tier.GREEN)
     check("irregularity exactly at the gate escalates",
-          decide(irregularity=K_RR_IRREGULARITY_GATE).tier is Tier.AMBER)
+          decide(irregularity=K_RR_IRREGULARITY_GATE).tier is Tier.YELLOW)
     check("HR at the low boundary is still normal",
-          decide(irregularity=0.8, hr=K_HR_LOW).tier is Tier.AMBER)
+          decide(irregularity=0.8, hr=K_HR_LOW).tier is Tier.YELLOW)
     check("HR at the high boundary is still normal",
-          decide(irregularity=0.8, hr=K_HR_HIGH).tier is Tier.AMBER)
+          decide(irregularity=0.8, hr=K_HR_HIGH).tier is Tier.YELLOW)
+
+    print("\nFive-state triage: history (contracts/tiers.md section 2)")
+    check("irregular, normal rate, repeated across visits -> ORANGE",
+          decide(irregularity=0.8, hr=72, history_intermittent=True).tier
+          is Tier.ORANGE)
+    check("irregular, normal rate, persistent history -> ORANGE too",
+          decide(irregularity=0.8, hr=72, history_persistent=True).tier
+          is Tier.ORANGE)
+    check("a clean visit stays GREEN with no history",
+          decide(irregularity=0.1, hr=72).tier is Tier.GREEN)
+    d = decide(irregularity=0.1, hr=72, history_intermittent=True)
+    check("a clean visit is escalated to ORANGE by an intermittent history",
+          d.tier is Tier.ORANGE and d.decided_by is DecidedBy.HISTORY)
+    check("a clean visit is NOT escalated by a merely persistent history",
+          decide(irregularity=0.1, hr=72, history_persistent=True).tier
+          is Tier.GREEN)
+    check("an abnormal rate still reaches RED regardless of history",
+          decide(irregularity=0.8, hr=140, history_intermittent=True).tier
+          is Tier.RED)
 
     print("\nDetector combination")
     check("rules alone escalate when the CNN has not shipped",
@@ -166,6 +200,8 @@ def main():
           version_for(DecidedBy.RULES) == K_RULES_VERSION)
     check("version string records the CNN when it ran",
           K_CNN_VERSION in version_for(DecidedBy.RULES_AND_CNN))
+    check("version string for a history-driven decision records rules only",
+          version_for(DecidedBy.HISTORY) == K_RULES_VERSION)
 
     print("\nSafety invariants")
     forbidden = ("fibrillation", "af", "arrhythmia", "atrial")

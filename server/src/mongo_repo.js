@@ -108,7 +108,7 @@ export class MongoRepo {
       .limit(limit)
       .toArray();
 
-    // Tier order is clinical, not lexical: RED must lead, and 'AMBER' < 'RED'
+    // Tier order is clinical, not lexical: RED must lead, and 'ORANGE' < 'RED'
     // alphabetically. Sorted here rather than in Mongo to keep the index on
     // capturedAt doing the work that matters.
     return rows.sort(

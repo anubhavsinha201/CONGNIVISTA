@@ -228,7 +228,7 @@ describe('acknowledgements', () => {
 
   test('the cursor excludes acks already seen', async () => {
     const a = record({ tier: 'RED' });
-    const b = record({ tier: 'AMBER' });
+    const b = record({ tier: 'YELLOW' });
     await service.ingest([a, b], DEVICE);
 
     await service.setReferralState({ recordId: a.recordId, referralState: 'acknowledged' });
@@ -342,7 +342,7 @@ describe('clinician outcomes — the finding, distinct from the process', () => 
   test('inconclusive is a distinct outcome, not a rejection of the referral', async () => {
     // CLAUDE.md / record.dart: inconclusive is NOT a negative. It must be
     // representable as its own value, never coerced to not_confirmed.
-    const r = record({ tier: 'AMBER' });
+    const r = record({ tier: 'YELLOW' });
     await service.ingest([r], DEVICE);
     await service.setReferralState({
       recordId: r.recordId,
@@ -368,18 +368,19 @@ describe('clinician outcomes — the finding, distinct from the process', () => 
 });
 
 describe('queue', () => {
-  test('RED leads, then AMBER — clinical order, not alphabetical', async () => {
+  test('RED, ORANGE, YELLOW, GREEN — clinical order, not alphabetical', async () => {
     await service.ingest(
       [
         record({ tier: 'GREEN' }),
+        record({ tier: 'YELLOW' }),
         record({ tier: 'RED', decidedBy: 'cnn', modelVersion: 'af-cnn-int8-1.0+cal1' }),
-        record({ tier: 'AMBER' }),
+        record({ tier: 'ORANGE', decidedBy: 'history' }),
       ],
       DEVICE,
     );
 
     const q = await service.queue({ phcId: 'phc-042' });
-    assert.deepEqual(q.map((r) => r.tier), ['RED', 'AMBER', 'GREEN']);
+    assert.deepEqual(q.map((r) => r.tier), ['RED', 'ORANGE', 'YELLOW', 'GREEN']);
   });
 
   test('filters to one PHC', async () => {
@@ -403,7 +404,7 @@ describe('the v2 amendment', () => {
   test('a PPG-escalated RED can explain itself', async () => {
     // The reason schemaVersion went to 2. Under v1 these keys had nowhere to
     // live and additionalProperties:false rejected them, so a PHC saw a RED
-    // with no evidence for why it was not an AMBER.
+    // with no evidence for why it was not a lower tier.
     const r = record({
       tier: 'RED',
       decidedBy: 'rules+cnn',

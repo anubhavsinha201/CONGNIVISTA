@@ -5,7 +5,7 @@ import 'record.dart';
 /// One entry in a patient's screening timeline.
 class TimelineEntry {
   final DateTime capturedAt;
-  final String tier; // RED / AMBER / GREEN / RETAKE
+  final String tier; // RED / ORANGE / YELLOW / GREEN / RETAKE
   final double? meanHr;
   final double? rrIrregularityScore;
   final ReferralState? referralState;
@@ -26,7 +26,7 @@ class TimelineEntry {
   bool get scored => tier != 'RETAKE';
 
   /// True when the rhythm was flagged. RETAKE is not a negative — it is silence.
-  bool get flagged => tier == 'RED' || tier == 'AMBER';
+  bool get flagged => tier == 'RED' || tier == 'ORANGE' || tier == 'YELLOW';
 }
 
 /// How confident we can be in an AF-burden figure, given how much was sampled.
@@ -143,7 +143,8 @@ class PatientHistory {
   /// Worst tier ever recorded for this patient.
   String get worstTier {
     if (scored.any((e) => e.tier == 'RED')) return 'RED';
-    if (scored.any((e) => e.tier == 'AMBER')) return 'AMBER';
+    if (scored.any((e) => e.tier == 'ORANGE')) return 'ORANGE';
+    if (scored.any((e) => e.tier == 'YELLOW')) return 'YELLOW';
     if (scored.isNotEmpty) return 'GREEN';
     return 'RETAKE';
   }
@@ -199,8 +200,10 @@ class PatientHistory {
     switch (worstTier) {
       case 'RED':
         return kIntervalAfterRed;
-      case 'AMBER':
-        return kIntervalAfterAmber;
+      case 'ORANGE':
+        return kIntervalAfterOrange;
+      case 'YELLOW':
+        return kIntervalAfterYellow;
       case 'RETAKE':
         return kIntervalAfterRetake;
       default:
@@ -212,7 +215,8 @@ class PatientHistory {
   static const int kIntervalOpenReferral = 14;
   static const int kIntervalIntermittent = 30;
   static const int kIntervalAfterRed = 14;
-  static const int kIntervalAfterAmber = 45;
+  static const int kIntervalAfterOrange = 21;
+  static const int kIntervalAfterYellow = 45;
   static const int kIntervalAfterRetake = 7;
   static const int kIntervalRoutine = 180;
 
@@ -236,7 +240,9 @@ class PatientHistory {
     switch (worstTier) {
       case 'RED':
         return 'previous_urgent_referral';
-      case 'AMBER':
+      case 'ORANGE':
+        return 'previous_repeated_finding';
+      case 'YELLOW':
         return 'previous_referral';
       case 'RETAKE':
         return 'last_capture_unusable';

@@ -20,20 +20,28 @@ enum Tier {
   /// Refer today, within 4 hours.
   red,
 
-  /// Refer within 48 hours.
-  amber,
+  /// Refer within 24 hours. Irregularity flagged (this visit, or a clean
+  /// visit read against an intermittent history) and it fits a pattern
+  /// already seen across this patient's visits — see contracts/tiers.md §2.
+  orange,
+
+  /// Refer within 48 hours. Irregularity flagged for the first time, with no
+  /// repeated-visit pattern behind it (or not enough history to say).
+  yellow,
 
   /// No rhythm concern today.
   green,
 }
 
 /// Which path produced the tier. Serialised into the record so the PHC can see
-/// what evidence a referral rests on.
-enum DecidedBy { gate, rules, cnn, rulesAndCnn }
+/// what evidence a referral rests on. [history] is the one case where neither
+/// detector flagged this visit — a clean window escalated to
+/// [Tier.orange] purely because [TierInputs.historyIntermittent] was true.
+enum DecidedBy { gate, rules, cnn, rulesAndCnn, history }
 
 /// Whether the contact PPG corroborated the ECG's finding. Recorded so the
 /// PHC can see what evidence a referral rests on, and so the escalation from
-/// AMBER to RED is auditable rather than mysterious.
+/// YELLOW or ORANGE to RED is auditable rather than mysterious.
 enum PpgCorroboration { none, unusable, agreed, pulseDeficit, nonPerfusingBeats }
 
 /// Why a window was rejected, when [Tier.retake].
@@ -99,6 +107,27 @@ class TierInputs {
   /// the R-peak detector is at fault rather than the patient.
   final bool fusionImplausible;
 
+  // ---- Patient history (contracts/tiers.md section 2) ----------------------
+  //
+  // Policy.decide never depends on PatientHistory directly: patient_history.dart
+  // imports record.dart, which imports this file, so a PatientHistory field
+  // here would be an import cycle. It would also break EcgAnalyser.analyse's
+  // purity — that function answers only from the samples it was given, with
+  // no store to query. Instead, the caller who already has both a fresh
+  // analysis and this patient's history (a future capture-flow screen; not
+  // built yet, see ticket 010) computes these two booleans and passes them
+  // in, the same way it already assembles every other TierInputs field.
+
+  /// PatientHistory.isIntermittent, computed from this patient's *prior*
+  /// scored visits — never including the visit being decided right now.
+  /// Defaults to false, matching today's single-visit behaviour when no
+  /// history is available.
+  final bool historyIntermittent;
+
+  /// PatientHistory.isPersistent, same caller-computed contract as
+  /// [historyIntermittent].
+  final bool historyPersistent;
+
   const TierInputs({
     required this.sqiScore,
     required this.motionRejected,
@@ -112,6 +141,8 @@ class TierInputs {
     this.pulseDeficitBpm,
     this.perfusedBeatFraction,
     this.fusionImplausible = false,
+    this.historyIntermittent = false,
+    this.historyPersistent = false,
   });
 }
 
@@ -318,6 +349,17 @@ class Policy {
       // toward sensitivity must not acquire a new way to reassure, and a
       // "normal" pulse must never be able to clear a patient the ECG did not
       // clear. Every PPG path escalates, corroborates, or is discarded.
+      //
+      // History gets a narrow exception: an intermittent pattern is, by
+      // definition, flagged on some visits and clean on others, so a clean
+      // window from a patient with that history is not the same evidence as
+      // a clean window from a patient with none (contracts/tiers.md §2,
+      // "Why ORANGE can fire on a clean visit"). isPersistent does not get
+      // this exception — a clean visit after an all-flagged history reads as
+      // a real result, not as evidence of a hidden episode.
+      if (i.historyIntermittent) {
+        return const TierDecision(tier: Tier.orange, decidedBy: DecidedBy.history);
+      }
       return TierDecision(tier: Tier.green, decidedBy: by);
     }
 
@@ -336,8 +378,17 @@ class Policy {
 
     // Beats that fail to reach the finger mean the irregularity is costing
     // this patient cardiac output right now. That earns the same urgency an
-    // abnormal rate does.
-    final tier = (rateAbnormal || corroborated) ? Tier.red : Tier.amber;
+    // abnormal rate does. History never reaches RED on its own — only this
+    // visit's own rate or mechanical evidence does.
+    if (rateAbnormal || corroborated) {
+      return TierDecision(tier: Tier.red, decidedBy: by, ppg: ppg);
+    }
+
+    // Irregular, rate normal, nothing mechanically corroborating it: ORANGE
+    // if this fits a pattern already seen across visits, YELLOW if it is the
+    // first time (or there isn't enough history to call it a pattern).
+    final repeatedAcrossVisits = i.historyIntermittent || i.historyPersistent;
+    final tier = repeatedAcrossVisits ? Tier.orange : Tier.yellow;
     return TierDecision(tier: tier, decidedBy: by, ppg: ppg);
   }
 
@@ -357,6 +408,9 @@ class Policy {
   static String versionFor(DecidedBy by) => switch (by) {
         DecidedBy.gate => kRulesVersion,
         DecidedBy.rules => kRulesVersion,
+        // No CNN contributed to a history-driven ORANGE: this visit's own
+        // rules (and CNN, if it ran) said clean.
+        DecidedBy.history => kRulesVersion,
         DecidedBy.cnn || DecidedBy.rulesAndCnn => '$kRulesVersion+$kCnnVersion',
       };
 }

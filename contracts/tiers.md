@@ -24,17 +24,35 @@ impossible to do accidentally.
 
 ## 2. Tier table
 
-Evaluated top to bottom. First match wins.
+Evaluated top to bottom. First match wins. `history.isIntermittent` /
+`history.isPersistent` are `PatientHistory` fields (`app/lib/data/patient_history.dart`),
+computed from this patient's *prior* scored visits — never including the visit being
+decided right now.
 
 | # | Tier | Condition | Meaning |
 |---|---|---|---|
 | 1 | ⚪ **RETAKE** | `sqiScore` < 0.5 **or** `motionRejected` **or** `leadOffDetected` **or** BLE seq gap **or** `rrIntervalCount` < 30 | Not a result. Reposition and capture again. |
-| 2 | 🔴 **RED** | irregularity high **and** (`meanHr` < 50 **or** `meanHr` > 120) | Refer today, within 4 hours |
-| 3 | 🟡 **AMBER** | irregularity high, `meanHr` 50–120 | Refer within 48 hours |
-| 4 | 🟢 **GREEN** | none of the above | No rhythm concern today |
+| 2 | 🔴 **RED** | irregularity high **and** (`meanHr` < 50 **or** `meanHr` > 120 **or** PPG corroborates — §7 of `ppg.md`) | Refer today, within 4 hours |
+| 3 | 🟠 **ORANGE** | irregularity high, rate normal, no PPG escalation, **and** `history.isIntermittent` **or** `history.isPersistent` — **or** irregularity is *not* high this visit but `history.isIntermittent` | Refer within 24 hours — a pattern seen before, not a one-off |
+| 4 | 🟡 **YELLOW** | irregularity high, rate normal, no PPG escalation, and no repeated-visit pattern | Refer within 48 hours — first time this has been flagged |
+| 5 | 🟢 **GREEN** | none of the above | No rhythm concern today |
 
 "irregularity high" = `rrIrregularityScore` ≥ 0.5, **or** `cnnScore` ≥ the calibrated
 INT8 threshold when the CNN ran. Either path alone is sufficient to escalate.
+
+### Why ORANGE can fire on a clean visit
+Row 3's second clause is deliberate, not a typo: a visit whose *own* irregularity check
+is clean can still come out ORANGE if `history.isIntermittent` — flagged on some past
+visits, clean on others. That is the definition of a paroxysmal rhythm, and a single
+clean 30-second window from a patient with that pattern is not the same evidence as a
+clean window from a patient with no history at all (`docs/PRODUCT.md` §3's whole
+longitudinal argument, `patient_history.dart`'s doc comment on `PatientHistory`).
+
+`history.isPersistent` (every prior scored visit flagged) deliberately does **not** get
+this same bypass. "Always flagged before, clean today" is read as a real result — possibly
+a treatment response — not as evidence of a hidden episode, so it does not manufacture a
+referral on its own. It still counts toward ORANGE on a visit that is *already* irregular
+on its own terms (row 3's first clause).
 
 ### Why the two detectors are OR'd, not averaged
 This is a **screening** instrument. The cost asymmetry is severe: a missed AF is a
@@ -47,10 +65,20 @@ exactly what discredit community screening programmes and get them shut down
 (PRODUCT.md §5.4). Refusing to score is a feature. The UI shows RETAKE in a neutral
 colour with a "what to fix" hint — never as an error or a failure.
 
-### Why RED needs an abnormal rate as well as irregularity
+### Why RED needs an abnormal rate (or PPG corroboration) as well as irregularity
 Rate is what separates "get seen this week" from "get seen now." Irregularity with a
 controlled ventricular rate is a referral; irregularity with a rate of 140 is a referral
-that should not wait for market day.
+that should not wait for market day. History never drives a visit to RED on its own —
+only this visit's own rate or mechanical (PPG) evidence does, so the worst a repeated
+pattern alone can produce is ORANGE.
+
+### Why ORANGE is 24 hours and YELLOW is 48
+Both are "irregularity flagged, rate normal, nothing mechanically corroborating it" —
+the only difference is whether the pattern has been seen before. A repeated or
+intermittent finding carries more weight than an isolated one, so it is asked to move
+faster, short of RED's same-day urgency which stays reserved for rate/PPG evidence. The
+exact hour counts are PROVISIONAL in the same sense §4's thresholds are — clinically
+reasoned, not fitted — and are part of what ticket 011's clinician review must sign off.
 
 ---
 
@@ -67,9 +95,14 @@ model-generated.**
 | Tier | Tamil | English |
 |---|---|---|
 | RED | இன்றே ஆரம்ப சுகாதார நிலையத்திற்குச் செல்லவும் — 4 மணி நேரத்திற்குள். | Go to the PHC today — within 4 hours. |
-| AMBER | இரண்டு நாட்களுக்குள் ஆரம்ப சுகாதார நிலையத்தில் பரிசோதனை செய்யவும். | Get checked at the PHC within two days. |
+| ORANGE | 24 மணி நேரத்திற்குள் ஆரம்ப சுகாதார நிலையத்தில் பரிசோதனை செய்யவும். இது முந்தைய வருகைகளிலும் தென்பட்டுள்ளது. | Get checked at the PHC within 24 hours. This has shown up on previous visits too. |
+| YELLOW | இரண்டு நாட்களுக்குள் ஆரம்ப சுகாதார நிலையத்தில் பரிசோதனை செய்யவும். | Get checked at the PHC within two days. |
 | GREEN | இன்று இதயத் துடிப்பில் சிக்கல் எதுவும் இல்லை. அடுத்த வருகையில் மீண்டும் பரிசோதிக்கவும். | No rhythm concern today. Recheck at the next visit. |
 | RETAKE | சமிக்ஞை தெளிவாக இல்லை. மின்முனைகளைச் சரிசெய்து மீண்டும் பரிசோதிக்கவும். | Signal is not clear. Reposition the electrodes and test again. |
+
+ORANGE's Tamil is a first DRAFT pass, not yet reviewed even at the level YELLOW/RED/
+GREEN/RETAKE's drafts were — it is new text ticket 007 had to add, not a straight carry
+of an existing reviewed line. Flagged for ticket 011.
 
 Supporting line shown under every non-RETAKE result:
 

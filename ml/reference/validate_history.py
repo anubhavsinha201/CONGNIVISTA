@@ -24,7 +24,8 @@ INTERVAL_CONFIRMED = 90
 INTERVAL_OPEN_REFERRAL = 14
 INTERVAL_INTERMITTENT = 30
 INTERVAL_AFTER_RED = 14
-INTERVAL_AFTER_AMBER = 45
+INTERVAL_AFTER_ORANGE = 21
+INTERVAL_AFTER_YELLOW = 45
 INTERVAL_AFTER_RETAKE = 7
 INTERVAL_ROUTINE = 180
 
@@ -50,7 +51,7 @@ class Entry:
 
     @property
     def flagged(self):
-        return self.tier in ("RED", "AMBER")
+        return self.tier in ("RED", "ORANGE", "YELLOW")
 
 
 @dataclass
@@ -97,7 +98,7 @@ class History:
 
     @property
     def worst_tier(self):
-        for t in ("RED", "AMBER"):
+        for t in ("RED", "ORANGE", "YELLOW"):
             if any(e.tier == t for e in self.scored):
                 return t
         return "GREEN" if self.scored else "RETAKE"
@@ -125,7 +126,8 @@ class History:
             return INTERVAL_OPEN_REFERRAL
         if self.is_intermittent:
             return INTERVAL_INTERMITTENT
-        return {"RED": INTERVAL_AFTER_RED, "AMBER": INTERVAL_AFTER_AMBER,
+        return {"RED": INTERVAL_AFTER_RED, "ORANGE": INTERVAL_AFTER_ORANGE,
+                "YELLOW": INTERVAL_AFTER_YELLOW,
                 "RETAKE": INTERVAL_AFTER_RETAKE}.get(self.worst_tier, INTERVAL_ROUTINE)
 
     @property
@@ -149,7 +151,9 @@ class History:
             return "referral_open"
         if self.is_intermittent:
             return "varies_between_visits"
-        return {"RED": "previous_urgent_referral", "AMBER": "previous_referral",
+        return {"RED": "previous_urgent_referral",
+                "ORANGE": "previous_repeated_finding",
+                "YELLOW": "previous_referral",
                 "RETAKE": "last_capture_unusable"}.get(self.worst_tier, "routine")
 
 
@@ -166,8 +170,8 @@ print("\n1. Feature 5 - the timeline from the notebook page")
 # Jan normal, Feb irregular, Mar suspicious -> PHC, Apr suspicious -> referred.
 notebook = History([
     Entry(240, "GREEN"),
-    Entry(210, "AMBER"),
-    Entry(180, "AMBER", referral_state="seen_at_phc"),
+    Entry(210, "YELLOW"),
+    Entry(180, "YELLOW", referral_state="seen_at_phc"),
     Entry(150, "RED", referral_state="acknowledged"),
 ])
 check("timeline is newest-first", notebook.entries[0].days_ago == 150)
@@ -180,7 +184,7 @@ check("flag rate counts only scored visits", abs(notebook.flag_rate - 0.75) < 1e
 check("flagged on some visits but not all -> intermittent", notebook.is_intermittent)
 
 # A RETAKE is missing data, not a negative. Counting it as one deflates the rate.
-with_retake = History([Entry(30, "AMBER"), Entry(20, "RETAKE"), Entry(10, "AMBER")])
+with_retake = History([Entry(30, "YELLOW"), Entry(20, "RETAKE"), Entry(10, "YELLOW")])
 check("RETAKE excluded from the denominator", abs(with_retake.flag_rate - 1.0) < 1e-9,
       f"rate={with_retake.flag_rate:.2f} over {len(with_retake.scored)} scored")
 check("all-flagged is persistent, not intermittent",
@@ -188,9 +192,9 @@ check("all-flagged is persistent, not intermittent",
       "only 2 scored visits, below the burden minimum")
 
 print("\n3. Confidence gating - refusing to quote a rate too early")
-two = History([Entry(10, "AMBER"), Entry(3, "GREEN")])
+two = History([Entry(10, "YELLOW"), Entry(3, "GREEN")])
 check("two visits -> insufficient", two.burden_confidence == "insufficient")
-tight = History([Entry(6, "AMBER"), Entry(3, "GREEN"), Entry(1, "AMBER")])
+tight = History([Entry(6, "YELLOW"), Entry(3, "GREEN"), Entry(1, "YELLOW")])
 check("three visits in a week -> provisional", tight.burden_confidence == "provisional",
       f"observation_days={tight.observation_days}")
 check("three visits over months -> usable", notebook.burden_confidence == "usable",
@@ -204,11 +208,11 @@ check("sooner after a RED",
       History([Entry(5, "RED")]).recommended_repeat_days == INTERVAL_AFTER_RED)
 check("soonest after a RETAKE - nothing was learned",
       History([Entry(5, "RETAKE")]).recommended_repeat_days == INTERVAL_AFTER_RETAKE)
-check("intermittent beats a plain AMBER history",
+check("intermittent beats a plain YELLOW history",
       notebook.recommended_repeat_days == INTERVAL_OPEN_REFERRAL,
       "open referral outranks intermittency")
 
-interm = History([Entry(90, "AMBER"), Entry(60, "GREEN"), Entry(30, "AMBER")])
+interm = History([Entry(90, "YELLOW"), Entry(60, "GREEN"), Entry(30, "YELLOW")])
 check("intermittent -> 30 days",
       interm.recommended_repeat_days == INTERVAL_INTERMITTENT
       and interm.repeat_reason_key == "varies_between_visits")
@@ -217,6 +221,16 @@ confirmed = History([Entry(40, "RED", referral_state="closed", outcome="confirme
 check("confirmed case moves to follow-up, not re-screening",
       confirmed.recommended_repeat_days == INTERVAL_CONFIRMED
       and confirmed.repeat_reason_key == "under_clinician_care")
+
+print("\n4b. Feature 12 - ORANGE (repeated across visits, contracts/tiers.md section 2)")
+orange_worst = History([Entry(60, "YELLOW"), Entry(40, "ORANGE"), Entry(20, "ORANGE")])
+check("ORANGE outranks YELLOW as the worst tier", orange_worst.worst_tier == "ORANGE")
+check("ORANGE gets its own repeat interval, between RED and YELLOW",
+      INTERVAL_AFTER_RED < INTERVAL_AFTER_ORANGE < INTERVAL_AFTER_YELLOW)
+check("all-flagged ORANGE history -> previous_repeated_finding",
+      orange_worst.recommended_repeat_days == INTERVAL_AFTER_ORANGE
+      and orange_worst.repeat_reason_key == "previous_repeated_finding",
+      f"days={orange_worst.recommended_repeat_days} reason={orange_worst.repeat_reason_key}")
 
 print("\n5. Due list and lapsed referrals")
 check("overdue is negative", History([Entry(200, "GREEN")]).days_until_due == -20)
@@ -240,10 +254,10 @@ check("no field here can hold a condition name",
           for k in ("fibrillation", "arrhythmia", "atrial")))
 
 print("\n7. Feature 3 - which records can train the model")
-labelled = [Entry(1, "AMBER", outcome="confirmed"),
-            Entry(2, "AMBER", outcome="not_confirmed"),
-            Entry(3, "AMBER", outcome="inconclusive"),
-            Entry(4, "AMBER", outcome=None)]
+labelled = [Entry(1, "YELLOW", outcome="confirmed"),
+            Entry(2, "YELLOW", outcome="not_confirmed"),
+            Entry(3, "YELLOW", outcome="inconclusive"),
+            Entry(4, "YELLOW", outcome=None)]
 usable = [e for e in labelled if e.outcome in ("confirmed", "not_confirmed")]
 check("only settled findings are training labels", len(usable) == 2,
       "inconclusive is NOT a negative - counting it as one would teach the "

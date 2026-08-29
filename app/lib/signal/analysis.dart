@@ -53,6 +53,7 @@ class ScreeningAnalysis {
           DecidedBy.rules => 'rules',
           DecidedBy.cnn => 'cnn',
           DecidedBy.rulesAndCnn => 'rules+cnn',
+          DecidedBy.history => 'history',
         },
         'tier': decision.tier.name.toUpperCase(),
         'modelVersion': Policy.versionFor(decision.decidedBy),

@@ -25,15 +25,16 @@
     --muted: #667085;
     --line: #e3e6ea;
     --red: #c9382e;
-    --amber: #c07a10;
+    --orange: #c1580f;
+    --yellow: #c07a10;
     --green: #2f7d4f;
     --retake: #7a8290;
   }
   @media (prefers-color-scheme: dark) {
     :root {
       --bg: #14171b; --panel: #1c2026; --ink: #e8eaed; --muted: #98a2b3;
-      --line: #2c323a; --red: #ef5a4c; --amber: #e0a63a; --green: #4cb87a;
-      --retake: #8b94a1;
+      --line: #2c323a; --red: #ef5a4c; --orange: #e88a3a; --yellow: #e0a63a;
+      --green: #4cb87a; --retake: #8b94a1;
     }
   }
   * { box-sizing: border-box; }
@@ -66,7 +67,8 @@
     border: 1px solid currentColor;
   }
   .t-RED { color: var(--red); }
-  .t-AMBER { color: var(--amber); }
+  .t-ORANGE { color: var(--orange); }
+  .t-YELLOW { color: var(--yellow); }
   .t-GREEN { color: var(--green); }
   .t-RETAKE { color: var(--retake); }
   .scroll { overflow-x: auto; }
@@ -172,7 +174,7 @@ const CLINICIAN_OUTCOME = {
   inconclusive: 'Inconclusive',
 };
 
-const TIERS = ['RED', 'AMBER', 'GREEN', 'RETAKE'];
+const TIERS = ['RED', 'ORANGE', 'YELLOW', 'GREEN', 'RETAKE'];
 const $ = (id) => document.getElementById(id);
 
 const fmtTime = (iso) => {
@@ -318,7 +320,7 @@ function renderMap(records) {
   }
 
   // RED drawn last so a cluster never hides the referrals that matter.
-  const order = { RETAKE: 0, GREEN: 1, AMBER: 2, RED: 3 };
+  const order = { RETAKE: 0, GREEN: 1, YELLOW: 2, ORANGE: 3, RED: 4 };
   for (const p of [...pts].sort((a, b) => (order[a.tier] ?? 0) - (order[b.tier] ?? 0))) {
     const c = el('circle', {
       cx: X(p.lon).toFixed(1), cy: Y(p.lat).toFixed(1),

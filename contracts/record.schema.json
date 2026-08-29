@@ -212,9 +212,10 @@
     "rules",
     "cnn",
     "rules+cnn",
-    "gate"
+    "gate",
+    "history"
    ],
-   "description": "Which path produced the tier. 'gate' means RETAKE."
+   "description": "Which path produced the tier. 'gate' means RETAKE. 'history' means this visit's own irregularity check was clean and PatientHistory.isIntermittent alone raised it to ORANGE."
   },
   "pulseDeficitBpm": {
    "type": [
@@ -269,13 +270,14 @@
     "nonPerfusingBeats",
     null
    ],
-   "description": "What the contact PPG contributed. Mirrors PpgCorroboration in app/lib/core/policy.dart. This is the field that makes an AMBER-to-RED escalation auditable instead of mysterious: without it a PHC sees a RED it cannot explain."
+   "description": "What the contact PPG contributed. Mirrors PpgCorroboration in app/lib/core/policy.dart. This is the field that makes a YELLOW/ORANGE-to-RED escalation auditable instead of mysterious: without it a PHC sees a RED it cannot explain."
   },
   "tier": {
    "type": "string",
    "enum": [
     "RED",
-    "AMBER",
+    "ORANGE",
+    "YELLOW",
     "GREEN",
     "RETAKE"
    ]

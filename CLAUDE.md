@@ -28,7 +28,7 @@ it works.
 4. **Offline is the product, not a mode.** Every screening completes with the radio off.
    Sync is opportunistic and never blocks a result.
 5. **No PII leaves the device.** Only a salted `patientPseudoId`. No name, phone, or Aadhaar.
-6. **Contact PPG escalates, never reassures.** It can raise AMBER to RED and can force a
+6. **Contact PPG escalates, never reassures.** It can raise YELLOW or ORANGE to RED and can force a
    RETAKE, but must never downgrade a tier or clear a patient the ECG did not clear.
    See [contracts/ppg.md](contracts/ppg.md) §7.
 7. **No model-generated text, ever.** All worker-facing strings come from a static,
@@ -81,7 +81,7 @@ cd app && flutter pub get
 cd app && flutter analyze                       # no analysis_options.yaml yet; see Gotchas
 cd app && flutter test                          # all tests
 cd app && flutter test test/policy_test.dart    # one file
-cd app && flutter test --plain-name "irregular, normal rate -> AMBER"   # one test
+cd app && flutter test --plain-name "irregular, normal rate, first time -> YELLOW"   # one test
 cd app && flutter run
 
 # --- ML pipeline ---

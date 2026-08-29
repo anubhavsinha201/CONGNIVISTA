@@ -144,4 +144,4 @@ export class SyncService {
 }
 
 /** Sort order for the referral queue: worst tier first, then newest. */
-export const TIER_RANK = { RED: 0, AMBER: 1, GREEN: 2, RETAKE: 3 };
+export const TIER_RANK = { RED: 0, ORANGE: 1, YELLOW: 2, GREEN: 3, RETAKE: 4 };

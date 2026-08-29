@@ -79,6 +79,7 @@ class Explainer {
       DecidedBy.cnn => 'why.source.model',
       DecidedBy.rulesAndCnn => 'why.source.both',
       DecidedBy.gate => 'why.source.gate',
+      DecidedBy.history => 'why.source.history',
     }));
 
     // Rate decides urgency, not presence — say which it did.
@@ -90,8 +91,8 @@ class Explainer {
       out.add(Reason('why.rate.normal', {'hr': i.meanHr.round().toString()}));
     }
 
-    // The PPG's contribution, when it had one. This is the field that makes an
-    // AMBER-to-RED escalation auditable rather than mysterious.
+    // The PPG's contribution, when it had one. This is the field that makes a
+    // YELLOW/ORANGE-to-RED escalation auditable rather than mysterious.
     switch (d.ppg) {
       case PpgCorroboration.pulseDeficit:
         out.add(Reason('why.ppg.pulseDeficit', {
@@ -162,6 +163,7 @@ const Set<String> kExplanationKeys = {
   'why.source.model',
   'why.source.both',
   'why.source.gate',
+  'why.source.history',
   'why.rate.low',
   'why.rate.high',
   'why.rate.normal',
@@ -174,6 +176,7 @@ const Set<String> kExplanationKeys = {
   'why.repeat.referral_open',
   'why.repeat.varies_between_visits',
   'why.repeat.previous_urgent_referral',
+  'why.repeat.previous_repeated_finding',
   'why.repeat.previous_referral',
   'why.repeat.last_capture_unusable',
   'why.repeat.routine',

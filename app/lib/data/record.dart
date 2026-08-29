@@ -150,8 +150,8 @@ class ScreeningRecord {
   final bool fusionValid;
   final bool fusionImplausible;
 
-  /// Why an AMBER became a RED, when it did. Without this the PHC sees a
-  /// referral it cannot account for.
+  /// Why a YELLOW or ORANGE became a RED, when it did. Without this the PHC
+  /// sees a referral it cannot account for.
   final String? ppgCorroboration;
 
   // ---- The answer ---------------------------------------------------------
@@ -501,10 +501,11 @@ class ScreeningRecord {
       errors.add('ageBand not in the enum: $ageBand');
     }
     if (villageCode.isEmpty) errors.add('villageCode is empty');
-    if (!const {'RED', 'AMBER', 'GREEN', 'RETAKE'}.contains(tier)) {
+    if (!const {'RED', 'ORANGE', 'YELLOW', 'GREEN', 'RETAKE'}.contains(tier)) {
       errors.add('tier not in the enum: $tier');
     }
-    if (!const {'rules', 'cnn', 'rules+cnn', 'gate'}.contains(decidedBy)) {
+    if (!const {'rules', 'cnn', 'rules+cnn', 'gate', 'history'}
+        .contains(decidedBy)) {
       errors.add('decidedBy not in the enum: $decidedBy');
     }
     if (sqiScore < 0 || sqiScore > 1) errors.add('sqiScore outside 0..1');

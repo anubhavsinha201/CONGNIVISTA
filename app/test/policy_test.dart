@@ -14,6 +14,8 @@ TierInputs inputs({
   double hr = 72,
   double irregularity = 0.1,
   double? cnn,
+  bool historyIntermittent = false,
+  bool historyPersistent = false,
 }) =>
     TierInputs(
       sqiScore: sqi,
@@ -24,6 +26,8 @@ TierInputs inputs({
       meanHr: hr,
       rrIrregularityScore: irregularity,
       cnnScore: cnn,
+      historyIntermittent: historyIntermittent,
+      historyPersistent: historyPersistent,
     );
 
 void main() {
@@ -79,8 +83,8 @@ void main() {
       expect(Policy.decide(inputs(irregularity: 0.2, hr: 72)).tier, Tier.green);
     });
 
-    test('irregular, normal rate -> AMBER', () {
-      expect(Policy.decide(inputs(irregularity: 0.8, hr: 72)).tier, Tier.amber);
+    test('irregular, normal rate, first time -> YELLOW', () {
+      expect(Policy.decide(inputs(irregularity: 0.8, hr: 72)).tier, Tier.yellow);
     });
 
     test('irregular, tachycardic -> RED', () {
@@ -100,21 +104,63 @@ void main() {
     test('irregularity exactly at the gate escalates', () {
       expect(
           Policy.decide(inputs(irregularity: Policy.kRrIrregularityGate)).tier,
-          Tier.amber);
+          Tier.yellow);
     });
 
     test('rate boundaries are inclusive of the normal range', () {
       expect(Policy.decide(inputs(irregularity: 0.8, hr: Policy.kHrLow)).tier,
-          Tier.amber);
+          Tier.yellow);
       expect(Policy.decide(inputs(irregularity: 0.8, hr: Policy.kHrHigh)).tier,
-          Tier.amber);
+          Tier.yellow);
+    });
+  });
+
+  group('five-state triage: history (contracts/tiers.md section 2)', () {
+    test('irregular, normal rate, repeated across visits -> ORANGE', () {
+      final d = Policy.decide(
+          inputs(irregularity: 0.8, hr: 72, historyIntermittent: true));
+      expect(d.tier, Tier.orange);
+      expect(d.decidedBy, DecidedBy.rules);
+    });
+
+    test('irregular, normal rate, persistent history -> ORANGE too', () {
+      final d = Policy.decide(
+          inputs(irregularity: 0.8, hr: 72, historyPersistent: true));
+      expect(d.tier, Tier.orange);
+    });
+
+    test('a clean visit stays GREEN with no history', () {
+      expect(Policy.decide(inputs(irregularity: 0.1, hr: 72)).tier,
+          Tier.green);
+    });
+
+    test('a clean visit is escalated to ORANGE by an intermittent history',
+        () {
+      final d = Policy.decide(
+          inputs(irregularity: 0.1, hr: 72, historyIntermittent: true));
+      expect(d.tier, Tier.orange);
+      expect(d.decidedBy, DecidedBy.history);
+    });
+
+    test('a clean visit is NOT escalated by a merely persistent history', () {
+      // "Always flagged before, clean today" reads as a real result, not as
+      // evidence of a hidden episode - see contracts/tiers.md section 2.
+      final d = Policy.decide(
+          inputs(irregularity: 0.1, hr: 72, historyPersistent: true));
+      expect(d.tier, Tier.green);
+    });
+
+    test('an abnormal rate still reaches RED regardless of history', () {
+      final d = Policy.decide(inputs(
+          irregularity: 0.8, hr: 140, historyIntermittent: true));
+      expect(d.tier, Tier.red);
     });
   });
 
   group('detector combination', () {
     test('rules alone can escalate when the CNN has not shipped', () {
       final d = Policy.decide(inputs(irregularity: 0.8));
-      expect(d.tier, Tier.amber);
+      expect(d.tier, Tier.yellow);
       expect(d.decidedBy, DecidedBy.rules);
     });
 
@@ -132,6 +178,9 @@ void main() {
     test('version string records which detectors ran', () {
       expect(Policy.versionFor(DecidedBy.rules), Policy.kRulesVersion);
       expect(Policy.versionFor(DecidedBy.rulesAndCnn), contains(Policy.kCnnVersion));
+      // A history-driven ORANGE ran no CNN — only this visit's own rules
+      // (clean) plus the patient's history.
+      expect(Policy.versionFor(DecidedBy.history), Policy.kRulesVersion);
     });
   });
 

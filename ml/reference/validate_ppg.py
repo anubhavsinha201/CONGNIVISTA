@@ -203,7 +203,7 @@ def decide(**kw):
     base = pol.decide(**{k: v for k, v in kw.items()
                          if k in ("sqi", "motion", "lead_off", "gap", "rr_count",
                                   "hr", "irregularity", "cnn")})
-    if base.tier is not pol.Tier.AMBER and base.tier is not pol.Tier.RED:
+    if base.tier is not pol.Tier.YELLOW and base.tier is not pol.Tier.RED:
         return base.tier, "n/a"
     deficit = kw.get("deficit")
     perfused = kw.get("perfused")
@@ -217,14 +217,14 @@ def decide(**kw):
         corrob = "agreed"
     rate_abnormal = kw["hr"] < pol.K_HR_LOW or kw["hr"] > pol.K_HR_HIGH
     escalate = corrob in ("pulseDeficit", "nonPerfusingBeats")
-    return (pol.Tier.RED if (rate_abnormal or escalate) else pol.Tier.AMBER), corrob
+    return (pol.Tier.RED if (rate_abnormal or escalate) else pol.Tier.YELLOW), corrob
 
 
 t, c = decide(irregularity=0.8, hr=72)
-check("irregular + normal rate + no PPG -> AMBER", t is pol.Tier.AMBER and c == "none")
+check("irregular + normal rate + no PPG -> YELLOW", t is pol.Tier.YELLOW and c == "none")
 
 t, c = decide(irregularity=0.8, hr=72, deficit=1.0, perfused=0.99)
-check("PPG agrees -> stays AMBER", t is pol.Tier.AMBER and c == "agreed")
+check("PPG agrees -> stays YELLOW", t is pol.Tier.YELLOW and c == "agreed")
 
 t, c = decide(irregularity=0.8, hr=72, deficit=15.0, perfused=0.80)
 check("pulse deficit -> escalates to RED", t is pol.Tier.RED and c == "pulseDeficit")
