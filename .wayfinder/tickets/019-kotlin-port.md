@@ -1,8 +1,9 @@
 # 019 — Port the app from Flutter/Dart to native Android (Kotlin)
 
-`wayfinder:task` · Status: **modules 1-2 ported and verified; module 3 (Policy) paused
-by user request — module 8 (SignalSource/ReplaySource) pulled forward instead, see
-ticket 009**
+`wayfinder:task` · Status: **modules 1, 2, 5, 8 fully ported and verified. Module 3
+(Policy) paused by user request — its TYPES ported (not `decide()`) to unblock module 4.
+Module 7 narrowed to its pure state machine (not the real store/network). Module 6 not
+started. 56/56 tests passing across 8 classes.**
 
 ## Question
 
@@ -75,15 +76,26 @@ the latest release. Android Studio's bundled JBR is JDK 25, which Gradle 8.9 doe
 support (`gradle wrapper` failed outright); installed Temurin 17 separately and pointed
 `JAVA_HOME` at it, which resolved it.
 
-**Correction: `gradlew` exists after all.** The `wrapper` task reported FAILURE three
-times in a row (`Test of distribution url https://services.gradle.org/... failed`), which
-looked like the wrapper never got generated — but that validation is the task's *last*
-step, after it already writes `gradle/wrapper/gradle-wrapper.jar` and
-`gradle-wrapper.properties`. Found the files present anyway, tested
-`./gradlew.bat testDebugUnitTest` directly, and it works cleanly (Gradle 8.9, all 9 tests
-pass). Committed. The URL-validation step itself still fails in this network for reasons
-not chased down (general Maven/Google traffic clearly works fine); harmless since the
-wrapper is otherwise complete and correct.
+**Correction to an earlier note in this ticket: the wrapper was missing, and was added
+by hand — the `wrapper` task did not produce it.** `android/gradle/wrapper/` was an empty
+directory (git does not carry empty directories, so a fresh clone had nothing), there was
+no `gradlew`/`gradlew.bat`, and no `gradle` on PATH or distribution in `~/.gradle` — the
+only way anyone had run these tests was Android Studio driving its own Gradle. The four
+files now committed came from Gradle's own repository at tag `v8.9.0`
+(`gradlew`, `gradlew.bat`, `gradle-wrapper.jar`, jar verified to contain
+`org/gradle/wrapper/GradleWrapperMain.class`), plus a hand-written
+`gradle-wrapper.properties`.
+
+That properties file **pins `distributionSha256Sum`** to the published checksum for
+`gradle-8.9-bin.zip` (`d725d707…cecab`), which the local distribution was verified
+against before first use. Do not regenerate it with a plain `gradle wrapper` — that drops
+the pin.
+
+Java's `HttpURLConnection` times out following the `services.gradle.org` → GitHub releases
+redirect in this network even though `curl` follows it fine, so the distribution was
+fetched with `curl` into `~/.gradle/wrapper/dists/gradle-8.9-bin/90cnw93cvbtalezasaz0blq0a/`
+and checksum-verified there. `./gradlew test` then runs clean from a bare shell with
+`JAVA_HOME` on Temurin 17 — 9 tests, both debug and release variants.
 
 **Recurring, unrelated nuisance worth naming:** `android/app/build/test-results/` hit a
 Windows/OneDrive file-lock or cloud-placeholder issue **three separate times** during this
@@ -165,6 +177,76 @@ testDebugUnitTest`: 9/9 across all three test classes.
 
 Module 3 (Policy) is still next once resumed — it's the safety-critical one
 (non-negotiables 1, 2, 6), checked against `validate_policy.py`'s 35 cases.
+
+## Modules 4, 5, 7 (2026-08-30) — with two deliberate scope narrowings, named up front
+
+Continuing to skip module 3's actual `decide()` logic, but two of the remaining modules
+turned out to need pieces of Policy's *shape* even so. Handled the same way module 8 was
+pulled forward: port only what's needed, name the boundary explicitly, don't quietly do
+more or less than asked.
+
+**Module 5 — Record + patient history, fully ported, no Policy dependency at all.**
+Checking `record.dart` and `patient_history.dart` directly (not assuming) showed neither
+needs `Policy.decide()` — `ScreeningRecord.tier`/`decidedBy` are plain strings matching
+the wire format, and `PatientHistory` only ever compares tier as a string. The one thing
+skipped is `ScreeningRecord.fromAnalysis()`, which *does* take a `ScreeningAnalysis`
+(module 3's output) — not ported, since there's nothing to build it from yet.
+
+- `PseudoId.kt` — HMAC-SHA256 pseudo-ID derivation (`javax.crypto.Mac`, no dependency
+  needed). `ScreeningRecord.kt` — the full v4 schema, `toJson`/`fromJson`/`toSyncJson`,
+  `validate()`, `newRecordId()`. `PatientHistory.kt` — the full longitudinal-risk feature
+  set (flag rate, intermittency, burden confidence, adaptive repeat interval).
+- Uses `org.json:json` as a real `implementation` dependency (not `testImplementation`)
+  — Android's own `org.json.JSONObject` is a compile-only stub that throws "not mocked"
+  in a plain JVM test; the real artifact is what makes the same code run in both places
+  (device uses the platform's own classes at runtime regardless).
+- Tests mirror `ml/reference/validate_history.py`'s checks one-to-one, same scenario
+  names, so three implementations (Dart source, Python mirror, this port) can't quietly
+  drift apart from each other. One real bug caught in the *test*, not the port: hardcoding
+  a fixed reference date for `daysUntilDue` assertions ignored that `PatientHistory` calls
+  the real, non-injectable `OffsetDateTime.now()` (faithfully matching Dart's
+  `DateTime.now()`) — any nonzero time between building a fixture and the class's own
+  `now()` call pushes a duration just under a day boundary, and truncating day-math
+  always rounds that down. Fixed by asserting the 2-value range truncation can actually
+  produce, not a single literal — a `-1` day-count discrepancy is expected behavior here,
+  not flakiness to paper over.
+
+**Module 4 — Explanation, needed a *slice* of Policy's shape, not `decide()`.**
+`explanation.dart` reads `Policy`'s enums (`Tier`, `DecidedBy`, `RetakeReason`,
+`PpgCorroboration`), two data classes (`TierDecision`, `TierInputs`), and exactly four
+named constants (`kRrIrregularityGate`, `kCnnThresholdInt8`, `kHrLow`, `kHrHigh`).
+`PolicyTypes.kt` ports precisely that and nothing else — its header comment names what's
+deliberately absent (`decide()`, `kSqiGate`, `kMinRrIntervals`, both motion-gate
+constants) so the boundary stays visible at a glance rather than eroding the next time
+someone touches the file. `Explanation.kt` ports `Reason`/`Explainer`/`EXPLANATION_KEYS`
+in full. 14 tests, including one that walks every `RetakeReason`/`DecidedBy`/
+`PpgCorroboration` branch and asserts every key it observes is covered by
+`EXPLANATION_KEYS` — a missing key here is a blank line on a worker's screen at a
+doorstep, per the Dart doc comment this test takes at its word.
+
+**Module 7 — narrowed to the pure state machine, not `SyncEngine`/`LocalStore`
+themselves.** `sync.dart`'s `SyncEngine` orchestrates a real `LocalStore` (encrypted,
+module 6 — SQLCipher for Android vs Jetpack Security, a real comparison ticket 019 always
+said this needed, not made here) and a real `SyncClient` (HTTP, not built). Porting
+`SyncEngine` faithfully would mean either building both of those first or stubbing them
+dishonestly. What's fully specified and fully testable *without* either: the backoff
+ladder (`nextRetryAt`'s jittered exponential climb, 5s→30s→2m→10m→30m→1h) and the
+per-record state machine (`pending`/`synced`/`failed`, `nextBatch`, `applyAck` scoped to
+synced rows only) — exactly what `validate_record.py`'s `FakeQueue` already mirrors on
+the Python side, because it's the same kind of storage-independent contract
+`PolicyTypes.kt` is for Policy. `Backoff.kt` + `SyncQueue.kt`, 9 tests matching
+`validate_record.py` sections 6-7 by scenario name. This becomes the state machine the
+real `LocalStore` sits on top of once module 6's storage choice is actually made — not a
+placeholder to throw away.
+
+**Not touched, and shouldn't be read as forgotten:** module 6 (encrypted store) is a
+materially different kind of task — it needs a real choice between SQLCipher-for-Android
+and Jetpack Security, and genuine verification needs Android instrumentation (a real
+`Context`, real file-system encryption-at-rest checks), not a plain JVM unit test the way
+everything above was checked. `SyncEngine`'s actual orchestration logic (the retry loop,
+`flush()`/`flushNow()`) and `SyncClient` (real HTTP) are similarly still open.
+
+`gradle testDebugUnitTest`: **56/56 tests passing**, 8 test classes, 0 failures.
 
 ## Note on the rest of the tracker
 

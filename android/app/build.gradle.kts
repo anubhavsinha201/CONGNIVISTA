@@ -33,8 +33,13 @@ android {
 }
 
 dependencies {
+    // Implementation, not testImplementation: record/sync JSON is used from
+    // main source. On a real device the platform's own org.json classes take
+    // over at runtime as usual; this artifact is what makes the same code
+    // runnable in a plain JVM unit test, where Android's org.json is a stub
+    // that throws "not mocked".
+    implementation("org.json:json:20240303")
     testImplementation("junit:junit:4.13.2")
-    testImplementation("org.json:json:20240303")
 }
 
 // The golden-vector fixtures live outside this module - app/test/fixtures/, shared
