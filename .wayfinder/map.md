@@ -42,6 +42,7 @@ not sample rows.
 | | |
 |---|---|
 | Built and verified | Signal chain, SQI, PPG + fusion, policy, patient history, INT8-calibrated model (83 KB), encrypted queue, sync engine, sync service (33 tests), read-only dashboard — **all as the Python-verified spec; the Dart implementation of these is now superseded, see below** |
+| **MongoDB Atlas — real, not simulated** | Server ran against a live M0 cluster (`cluster0.jqe5dp9.mongodb.net`); a real record POSTed through `/v1/records:batch` and read back through `/v1/queue`. One synthetic test record left in the `arogyax` DB, harmless but worth clearing before a real demo. See ticket 017 |
 | **App target changed 2026-08-30** | Flutter/Dart → native Android/Kotlin (ticket 019, user decision, reverses CLAUDE.md's prior "central architectural fact"). The ~3,900 lines of Dart never got compiled and now never will — kept as the module-by-module reference the Kotlin port is built against. Python mirrors are unaffected; they were always the verified side |
 | Absent | `main.dart`/Kotlin equivalent, any UI, BLE, `SignalSource`, Tamil strings, replay traces — all still to be written, now directly in Kotlin |
 | **Firmware flashed, boots clean on real hardware** | Real ESP32-D0WD-V3 (MAC `70:4b:ca:56:b1:10`) over COM7. Boot log confirmed live: I2C up, real MAX30102 answered, BLE advertising started, no crash/reset loop. BLE-visibility-to-a-phone confirmed via nRF Connect; PPG showing flat/low readings (open problem, not yet root-caused); AD8232 electrode signal still untested. See ticket 013 |
