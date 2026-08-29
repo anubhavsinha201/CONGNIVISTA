@@ -1,0 +1,4 @@
+# gradlew is executed by CI and by Unix developers: it must stay LF regardless
+# of the checkout platform, or it fails with "bad interpreter: no such file".
+gradlew text eol=lf
+*.jar binary

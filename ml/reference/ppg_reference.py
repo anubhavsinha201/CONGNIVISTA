@@ -39,6 +39,27 @@ MOTION_WANDER_RATIO_GATE = 0.35
 MOTION_PERFUSION_INSTABILITY_GATE = 1.0
 
 
+def _percentile_floor(values, frac):
+    """Dart's `sorted[(length * frac).floor()]` - deliberately NOT np.percentile.
+
+    app/lib/signal/ppg.dart and fusion.dart index a sorted list directly; numpy
+    interpolates between the two neighbouring samples, so the two disagree on
+    every array whose length * frac is not an integer. This is the same
+    index-floor idiom dsp_reference._normalised_shannon_entropy already uses for
+    its RR trim - which is exactly why module 1's golden vectors matched to 1e-6
+    with no adjustment, while PPG's silently drifted (ticket 019).
+
+    Note frac=0.5 reproduces Dart's `sorted[length ~/ 2]`: floor(n * 0.5) == n // 2,
+    so the even-count "median" here is the upper middle element, not np.median's
+    average of the two middle ones.
+
+    The Dart is the deliverable and this file mirrors it: if ppg.dart's method
+    ever changes, change it here too and regenerate the golden vectors.
+    """
+    s = np.sort(np.asarray(values, dtype=float))
+    return float(s[int(math.floor(s.size * frac))])
+
+
 def ppg_band(fs=PPG_FS):
     return [dsp.biquad_highpass(fs, 0.5), dsp.biquad_lowpass(fs, 5.0)]
 
@@ -75,7 +96,7 @@ def perfusion_index(raw, fs=PPG_FS):
     if abs(dc) < 1e-9:
         return 0.0
     ac = dsp.filtfilt_fast(ppg_band(fs), raw)
-    lo, hi = np.percentile(ac, 5), np.percentile(ac, 95)
+    lo, hi = _percentile_floor(ac, 0.05), _percentile_floor(ac, 0.95)
     return abs(hi - lo) / abs(dc) * 100.0
 
 
@@ -84,8 +105,8 @@ def detect_systolic_peaks(x, fs=PPG_FS):
     derivative emphasis is the wrong tool. Adaptive amplitude threshold with a
     physiological refractory period instead."""
     refractory = max(1, round(MIN_IBI_MS / 1000.0 * fs))
-    median = float(np.median(x))
-    upper = float(np.percentile(x, 75))
+    median = _percentile_floor(x, 0.5)
+    upper = _percentile_floor(x, 0.75)
     threshold = median + 0.5 * (upper - median)
 
     guard = round(EDGE_GUARD_MS / 1000.0 * fs)
@@ -138,7 +159,7 @@ def perfusion_stability(raw, fs=PPG_FS):
     spreads = np.empty(n)
     for i in range(n):
         seg = ac[i * window:(i + 1) * window]
-        lo, hi = np.percentile(seg, [5, 95])
+        lo, hi = _percentile_floor(seg, 0.05), _percentile_floor(seg, 0.95)
         spreads[i] = abs(hi - lo)
     spreads = spreads / abs(dc) * 100.0
     mean = spreads.mean()
@@ -231,7 +252,7 @@ def fuse(ecg_peak_ms, ppg_peak_ms, ppg_usable=True, simultaneous=True) -> Fusion
             idx += 1
 
     fraction = matched / len(ecg_in)
-    median_ptt = float(np.median(ptts)) if ptts else 0.0
+    median_ptt = _percentile_floor(ptts, 0.5) if ptts else 0.0
 
     # Derived from the per-beat matching, not from two independently windowed
     # rates. Same finding expressed as a rate; a negative value is now

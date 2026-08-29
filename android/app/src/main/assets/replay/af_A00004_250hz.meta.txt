@@ -1,0 +1,4 @@
+source: PhysioNet/CinC Challenge 2017, training2017/A00004.mat
+label: AF (REFERENCE.csv)
+format: little-endian int16, 250 Hz, 7500 samples (30.0 s)
+processing: resampled 300->250 Hz only - NOT filtered, NOT normalised, NOT rescaled. The app's own SqiAnalyser/FilterChain run on this exactly as they would on a live ESP32 capture.

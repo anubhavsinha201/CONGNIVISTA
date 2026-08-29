@@ -1,7 +1,8 @@
 # 019 — Port the app from Flutter/Dart to native Android (Kotlin)
 
-`wayfinder:task` · Status: **modules 1-2 ported and verified against real Gradle build**
-— modules 3-7 not started
+`wayfinder:task` · Status: **modules 1-2 ported and verified; module 3 (Policy) paused
+by user request — module 8 (SignalSource/ReplaySource) pulled forward instead, see
+ticket 009**
 
 ## Question
 
@@ -74,14 +75,25 @@ the latest release. Android Studio's bundled JBR is JDK 25, which Gradle 8.9 doe
 support (`gradle wrapper` failed outright); installed Temurin 17 separately and pointed
 `JAVA_HOME` at it, which resolved it.
 
-**Known gap: no `gradlew` committed yet.** The `wrapper` task's distribution-URL
-validation step (`Test of distribution url https://services.gradle.org/... failed`) fails
-consistently in this environment even though normal dependency downloads (AGP, Kotlin
-plugin, junit, org.json — all resolved fine) clearly work — looks like that specific
-validation request is blocked while general Maven/Google traffic isn't. Not chased further;
-builds run fine against a locally-extracted Gradle 8.9 in the meantime. Whoever picks this
-up next: either retry `gradle wrapper --gradle-version 8.9` from a network that allows it,
-or install Gradle 8.9 directly and build with that.
+**Correction: `gradlew` exists after all.** The `wrapper` task reported FAILURE three
+times in a row (`Test of distribution url https://services.gradle.org/... failed`), which
+looked like the wrapper never got generated — but that validation is the task's *last*
+step, after it already writes `gradle/wrapper/gradle-wrapper.jar` and
+`gradle-wrapper.properties`. Found the files present anyway, tested
+`./gradlew.bat testDebugUnitTest` directly, and it works cleanly (Gradle 8.9, all 9 tests
+pass). Committed. The URL-validation step itself still fails in this network for reasons
+not chased down (general Maven/Google traffic clearly works fine); harmless since the
+wrapper is otherwise complete and correct.
+
+**Recurring, unrelated nuisance worth naming:** `android/app/build/test-results/` hit a
+Windows/OneDrive file-lock or cloud-placeholder issue **three separate times** during this
+session (`Unable to delete directory`, then `not a regular file` on a retry) — this repo
+lives inside a OneDrive-synced folder, same root cause as the firmware `.pio` issue
+earlier. Fix each time was `rm -rf` the stuck directory and rerun; never a real code
+problem. If this becomes a recurring drag, excluding `android/app/build/` from OneDrive
+sync (right-click → "Always keep on this device" is the wrong direction; the actual fix
+is a `.txt`-style exclusion in OneDrive's own settings, or moving the checkout outside
+OneDrive entirely) would remove it permanently.
 
 **Module 1 (signal chain) ported and verified — real, not assumed:**
 `android/app/src/main/kotlin/com/arogyax/signal/`: `Filters.kt` (Biquad + FilterChain,
@@ -127,16 +139,32 @@ exact values. Found a second instance of the same class of drift in `fuse()`: Da
 "median" PTT is `sorted[len // 2]` (not a true median for an even count), while
 `ppg_reference.fuse()` uses `np.median` (which averages the two middle elements).
 
-Since the Kotlin port's job is to match `ppg.dart` (the deliverable), not
-`ppg_reference.py`, `generate_ppg_golden_vectors.py` computes expected values with
-Dart's actual methods (documented inline in that script), not by calling
-`ppg_reference.py`'s functions directly. **Not fixed in `ppg_reference.py` itself** —
-that's a separate, deliberate decision for whoever owns the Python reference: leave Dart
-and Kotlin as the source of truth on this specific formula, or make `ppg_reference.py`
-match and re-verify `validate_ppg.py` still passes. Flagging, not deciding.
+**Resolved, 2026-08-30 (outside this session):** `ppg_reference.py` was corrected to
+Dart's actual semantics — a `_percentile_floor` helper now backs `perfusion_index`,
+`perfusion_stability`, `detect_systolic_peaks`'s threshold, and `fuse`'s median PTT
+uniformly (the fix also caught the same index-floor-vs-percentile pattern in
+`detect_systolic_peaks`, which this ticket hadn't flagged). `generate_ppg_golden_vectors.py`
+now calls `ppg_reference.py` directly again — the Dart-faithful workaround copies this
+ticket originally needed are gone. Confirmed correct the rigorous way, not just
+plausible: regenerating the fixture from the corrected reference reproduced the exact
+same bytes this session's workaround-based version had already produced. Both
+`validate_ppg.py` and the Kotlin `PpgGoldenVectorsTest` stay green against one, now
+genuinely shared, reference.
 
 `gradle testDebugUnitTest`: **7/7 tests passing** (4 from module 1, 3 from module 2 —
 PPG analysis, fusion, and the zero-cases sanity check), 0 failures.
+
+## Module 3 paused (user request, 2026-08-30); module 8 pulled forward instead
+
+User asked to skip Policy for now and move to the next phase. `SignalSource`/
+`ReplaySource` (originally module 8, listed last only because nothing else had been
+built yet to need it) doesn't depend on Policy at all — it just supplies raw samples to
+the already-ported signal chain — so it was taken up out of order instead of leaving
+this ticket idle. Full detail in ticket 009, which now owns this piece. `gradle
+testDebugUnitTest`: 9/9 across all three test classes.
+
+Module 3 (Policy) is still next once resumed — it's the safety-critical one
+(non-negotiables 1, 2, 6), checked against `validate_policy.py`'s 35 cases.
 
 ## Note on the rest of the tracker
 
