@@ -80,6 +80,54 @@ check("perfusion index tracks pulsatile amplitude",
       f"{res.perfusion_index:.2f}% vs {res_weak.perfusion_index:.3f}%")
 
 # --------------------------------------------------------------------------
+print("\n2b. Inferred motion (the MPU-6050 is no longer in the BOM)")
+# --------------------------------------------------------------------------
+# A dedicated, densely and fully covering pulse train -- NOT the shared r_ms
+# above. That one comes from synth_ecg, which deliberately leaves a 1-2 s dead
+# zone at each end of its window (so a capture never starts or ends mid-
+# complex). Splitting a signal built on it into two halves compounds those
+# dead zones into exactly the kind of spurious low-amplitude tail this test
+# needs to NOT have, or it would measure the generator's own padding instead
+# of the disturbance being injected.
+def full_span_r_ms(duration_s, interval_ms=800.0):
+    return np.arange(0, duration_s * 1000.0, interval_ms)
+
+# A steady contact: same pulsatile amplitude throughout the capture.
+steady, _ = ppg.synth_ppg(full_span_r_ms(30.0), 30.0, PPG_FS, ac_fraction=0.02, seed=10)
+stability_steady = ppg.perfusion_stability(steady, PPG_FS)
+check("steady contact has low perfusion stability ratio", stability_steady < 0.3,
+      f"ratio={stability_steady:.3f}")
+
+# A finger that shifts partway through: amplitude drops sharply in the second
+# half. Built by concatenating two independently-generated, fully-covering
+# segments rather than varying synth_ppg's amplitude over time, since only the
+# stability metric is under test here.
+half = 15.0
+first, _ = ppg.synth_ppg(full_span_r_ms(half), half, PPG_FS, ac_fraction=0.02, seed=11)
+second, _ = ppg.synth_ppg(full_span_r_ms(half), half, PPG_FS, ac_fraction=0.004, seed=12)
+disturbed = np.concatenate([first, second])
+stability_disturbed = ppg.perfusion_stability(disturbed, PPG_FS)
+check("a mid-capture amplitude shift raises the stability ratio",
+      stability_disturbed >= ppg.MOTION_PERFUSION_INSTABILITY_GATE,
+      f"ratio={stability_disturbed:.3f} (gate {ppg.MOTION_PERFUSION_INSTABILITY_GATE})")
+check("the disturbed capture reads far less stable than the steady one",
+      stability_disturbed > stability_steady * 3,
+      f"{stability_disturbed:.3f} vs {stability_steady:.3f}")
+
+# infer_motion: the OR combination the Dart EcgAnalyser.analyse performs.
+usable_ppg = ppg.analyse_ppg(steady, PPG_FS)
+check("low wander + steady PPG -> no inferred motion",
+      not ppg.infer_motion(0.05, usable_ppg))
+check("high wander alone triggers it, regardless of the PPG",
+      ppg.infer_motion(ppg.MOTION_WANDER_RATIO_GATE, usable_ppg))
+disturbed_ppg = ppg.analyse_ppg(disturbed, PPG_FS)
+check("unstable PPG alone triggers it, even with low ECG wander",
+      disturbed_ppg.usable and ppg.infer_motion(0.05, disturbed_ppg),
+      f"ppg usable={disturbed_ppg.usable}")
+check("with no PPG capture at all, the ECG signal alone still decides",
+      not ppg.infer_motion(0.05, None) and ppg.infer_motion(0.9, None))
+
+# --------------------------------------------------------------------------
 print("\n3. Pulse deficit -- the multimodal quantity")
 # --------------------------------------------------------------------------
 # Sinus rhythm: every beat fills adequately, so every beat perfuses.

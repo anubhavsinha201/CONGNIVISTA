@@ -43,7 +43,10 @@ Commercial portable ECGs exist (e.g. Spandan ~₹5,500, Agatsa SanketLife ~₹4,
 
 ArogyaX plugs the rhythm-shaped hole in MTM with three pieces:
 
-1. **A ~₹2,500 sensor unit** — a single-lead (lead II) ECG front-end (AD8232) plus a motion sensor (MPU-6050), driven by an ESP32-S3, streaming to the phone over Bluetooth.
+1. **A ~₹2,500 sensor unit** — a single-lead (lead II) ECG front-end (AD8232) plus a
+   contact PPG sensor (MAX30102), driven by an ESP32-S3, streaming to the phone over
+   Bluetooth. Motion is inferred from these two signals rather than sensed by a dedicated
+   accelerometer (§5.3).
 2. **The worker's own phone as the compute** — a quantized on-device model reads the rhythm and outputs a referral priority tier, fully offline. Marginal compute cost per additional worker: ₹0.
 3. **A guideline-faithful workflow** — the phone camera does a quick pulse (PPG) pre-screen; an irregular pulse triggers the ECG confirmation. This mirrors the internationally endorsed *pulse-check-then-ECG* method for opportunistic AF screening in people 65+.
 
@@ -76,7 +79,10 @@ AF is intermittent, so one snapshot misses cases. The clinical answer is a 14-da
 
 1. **Offline AF screening** — on-device model, no cloud, works in airplane mode. The dead-zone problem that defeats telemedicine doesn't apply.
 2. **Pulse-then-ECG workflow** — phone-camera PPG pre-screen triggers ECG confirmation; mechanises the endorsed clinical algorithm.
-3. **Motion-gated capture** — the motion sensor rejects any trace recorded while the patient moved (movement mimics AF), killing the false positives that discredit screening tools.
+3. **Motion-gated capture** — the app rejects any trace recorded while the patient
+   moved (movement mimics AF, killing the false positives that discredit screening
+   tools), inferring movement from ECG baseline wander and, when available, contact-PPG
+   perfusion instability, rather than from a dedicated motion sensor.
 4. **Signal-quality gate** — the app refuses to score a poor-contact trace and prompts a retake, so a misplaced electrode never becomes a false referral.
 5. **Tamil explanation** — templated, clinician-reviewable text plus voice; never machine-generated medical prose.
 6. **Referral priority tier, not a diagnosis** — output is *how urgently to be seen*, ending in "refer to PHC within N hours," never a condition name.
@@ -109,7 +115,7 @@ ArogyaX measures this shift and refits the decision threshold on the quantized m
 
 | Item | Cost |
 |---|---|
-| Sensor unit (ESP32-S3 + AD8232 + MPU-6050 + battery + enclosure) | **≈ ₹1,840–2,880 per station** |
+| Sensor unit (ESP32-S3 + AD8232 + MAX30102 + battery + enclosure) | **≈ ₹1,840–2,880 per station** |
 | Phone (already owned by the worker) | **₹0** |
 | Recurring — ECG electrodes | **₹8–15 per patient** |
 

@@ -124,10 +124,34 @@ class Policy {
   /// RR statistics are meaningless below this many intervals. Fixed.
   static const int kMinRrIntervals = 30;
 
-  /// Per-second accelerometer magnitude variance, in milli-g, above which the
-  /// patient was moving. Movement mimics atrial fibrillation, so this gate is
-  /// what stops motion artefact becoming a false referral.
-  static const int kMotionVarGateMilliG = 150;
+  // ---- Inferred motion (contracts/ble.md, contracts/ppg.md) ---------------
+  //
+  // The MPU-6050 that used to sense motion directly is no longer in the BOM.
+  // Motion is inferred instead from two signals already computed for other
+  // reasons, OR'd together the same way the two AF detectors are: movement
+  // mimics atrial fibrillation, so a screening tool has to bias toward
+  // catching it even at the cost of an occasional unnecessary retake.
+  //
+  // Both thresholds are PROVISIONAL — physiologically reasoned, not fitted.
+  // There is no labelled disturbed-vs-still capture pairing in this build to
+  // fit them on (that is ticket 003's hardware bring-up); per CLAUDE.md
+  // non-negotiable 8 these are targets, not results, until retuned against
+  // real captures where the patient was deliberately moved.
+
+  /// ECG baseline-wander ratio (sqi.dart) at or above this counts as inferred
+  /// motion. Wander is caused by breathing, electrode movement, and cable
+  /// sway — motion is a subset of its causes, not the whole of them, which is
+  /// the known cost of inference: an IMU could tell "the patient moved" apart
+  /// from "the electrode is loose", and this cannot. Set below the
+  /// catastrophic-SQI-failure threshold (0.80) so real movement is caught
+  /// before the whole capture's quality collapses, not only after.
+  static const double kMotionWanderRatioGate = 0.35;
+
+  /// PPG perfusion-index instability (ppg.dart) at or above this corroborates
+  /// inferred motion. Zero for a steady contact; high when the pulsatile
+  /// signal swings within one capture, which is the PPG-side signature of a
+  /// finger shifting on the sensor.
+  static const double kMotionPerfusionInstabilityGate = 1.0;
 
   // ---- Irregularity ------------------------------------------------------
 

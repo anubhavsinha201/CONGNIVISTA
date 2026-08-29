@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import '../core/policy.dart';
 import 'filters.dart';
 import 'pan_tompkins.dart';
+import 'ppg.dart';
 import 'rr_features.dart';
 import 'sqi.dart';
 
@@ -73,15 +74,17 @@ class EcgAnalyser {
 
   /// [rawAdu] is samples as delivered over BLE: ADC value minus 2048.
   ///
-  /// [motionVarMilliG] is the once-per-second accelerometer variance from the
-  /// status characteristic. [dataGapDetected] must be true if any BLE sequence
-  /// number was skipped during the capture.
+  /// [ppg] is the simultaneous contact-PPG capture, when there is one — it
+  /// corroborates inferred motion (see [Policy.kMotionPerfusionInstabilityGate])
+  /// but is entirely optional, since a plain ECG-only capture is a normal
+  /// thing to have. [dataGapDetected] must be true if any BLE sequence number
+  /// was skipped during the capture.
   ///
   /// [cnnScore] is supplied by the caller if the INT8 model ran. Null is a
   /// perfectly normal state — the rules path stands on its own.
   ScreeningAnalysis analyse(
     Float64List rawAdu, {
-    List<int> motionVarMilliG = const [],
+    PpgResult? ppg,
     bool leadOffDetected = false,
     bool dataGapDetected = false,
     double? cnnScore,
@@ -93,8 +96,16 @@ class EcgAnalyser {
     // like a flat baseline; the gate has to see what actually arrived.
     final sqi = _sqi.analyse(rawAdu);
 
-    final motionRejected = motionVarMilliG
-        .any((v) => v > Policy.kMotionVarGateMilliG);
+    // Motion is INFERRED, not sensed — the MPU-6050 that used to answer this
+    // directly is no longer in the BOM. OR'd across both available signals,
+    // the same sensitivity-biased pattern the two AF detectors use: the ECG's
+    // own baseline wander is always available, and the PPG's perfusion
+    // stability corroborates it whenever a simultaneous capture exists. See
+    // Policy's doc comments for why each threshold is provisional.
+    final motionRejected = sqi.baselineWanderRatio >= Policy.kMotionWanderRatioGate ||
+        (ppg != null &&
+            ppg.usable &&
+            ppg.perfusionStabilityRatio >= Policy.kMotionPerfusionInstabilityGate);
 
     final conditioned = FilterChain.ecgConditioning(fs).filtfilt(rawAdu);
 

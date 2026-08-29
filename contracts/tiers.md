@@ -88,7 +88,8 @@ tune them, and so the demo cannot drift from this document.
 |---|---|---|
 | `kSqiGate` | 0.5 | C, tuned on real captures in Phase 1 |
 | `kMinRrIntervals` | 30 | Fixed — the RR statistics are meaningless below this |
-| `kMotionVarGateMilliG` | 150 | A + C, tuned by deliberately moving during a capture |
+| `kMotionWanderRatioGate` | 0.35 (PROVISIONAL) | Inferred from ECG baseline wander — the MPU-6050 is no longer in the BOM |
+| `kMotionPerfusionInstabilityGate` | 1.0 (PROVISIONAL) | Corroborated by PPG perfusion instability when a simultaneous capture exists |
 | `kRrIrregularityGate` | 0.5 | C, tuned against MIT-BIH AFDB |
 | `kCnnThresholdInt8` | TBD by D | **Refitted on INT8 scores**, never inherited from FP32 |
 | `kHrLow` / `kHrHigh` | 50 / 120 | Fixed |

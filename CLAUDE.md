@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ArogyaX — an offline atrial-fibrillation **screening and triage** layer for Tamil Nadu's
 *Makkalai Thedi Maruthuvam* doorstep health scheme. A health worker's Android phone plus a
-~₹2,500 single-lead ECG unit (ESP32 + AD8232 + MPU-6050 + MAX30102).
+~₹2,500 single-lead ECG unit (ESP32 + AD8232 + MAX30102; no IMU — motion is inferred).
 
 - **Product / concept doc:** [docs/PRODUCT.md](docs/PRODUCT.md)
 - **Interface contracts:** [contracts/](contracts/) — locked; read before writing code

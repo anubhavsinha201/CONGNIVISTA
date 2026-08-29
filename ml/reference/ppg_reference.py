@@ -23,6 +23,7 @@ MIN_IBI_MS = 250.0
 MAX_IBI_MS = 2000.0
 IRREGULARITY_GATE = 0.5
 EDGE_GUARD_MS = 500.0
+MOTION_SUB_WINDOW_SEC = 1.0
 
 PTT_MIN_MS = 150.0
 PTT_MAX_MS = 450.0  # R peak -> PPG SYSTOLIC PEAK
@@ -30,6 +31,12 @@ MIN_OVERLAP_SEC = 10.0
 
 PULSE_DEFICIT_BPM = 10.0
 PERFUSED_FRACTION_LOW = 0.90
+
+# Mirrors Policy.kMotionWanderRatioGate / kMotionPerfusionInstabilityGate.
+# PROVISIONAL, same caveat as the Dart constants: physiologically reasoned,
+# not fitted against real disturbed-vs-still captures.
+MOTION_WANDER_RATIO_GATE = 0.35
+MOTION_PERFUSION_INSTABILITY_GATE = 1.0
 
 
 def ppg_band(fs=PPG_FS):
@@ -45,7 +52,13 @@ class PpgResult:
     perfusion_index: float
     usable: bool
     beat_count: int
+    # PpgResult is constructed positionally at several call sites below, all
+    # of them ending in a `failure_reason` string (or omitting it). Both new
+    # fields therefore go AFTER failure_reason, not before it — inserting one
+    # earlier would silently shift every existing positional string argument
+    # into the wrong slot instead of raising an error.
     failure_reason: str | None = None
+    perfusion_stability_ratio: float = 0.0
 
     @property
     def prescreen(self) -> str:
@@ -95,6 +108,61 @@ def detect_systolic_peaks(x, fs=PPG_FS):
     return np.array(peaks, dtype=int)
 
 
+def perfusion_stability(raw, fs=PPG_FS):
+    """Spread of local AC amplitude across 1 s sub-windows, normalised by the
+    capture's overall DC level.
+
+    Zero for a uniformly steady contact, whether that contact is good or bad -
+    a uniformly weak signal is PERFUSION_GATE's job, not this one's. High only
+    when the signal quality itself swings during the capture, which is the
+    PPG-side signature of the finger moving. This is the PPG's contribution to
+    inferred motion detection now that the MPU-6050 is no longer in the BOM.
+
+    Filters the WHOLE capture once, then measures local spread on the already
+    -filtered signal - NOT by recomputing perfusion_index() independently on
+    each short sub-window. A 0.5 Hz highpass needs on the order of seconds to
+    settle; re-running it from scratch on an isolated 100-sample (1 s) slice
+    produces filter-edge noise of the same order as the physiological signal
+    being measured, which swamped this metric with spurious instability on a
+    perfectly steady synthetic capture during validation. Filtering once and
+    then windowing the result is what makes the measurement mean what it says.
+    """
+    dc = raw.mean()
+    if abs(dc) < 1e-9:
+        return 0.0
+    ac = dsp.filtfilt_fast(ppg_band(fs), raw)
+    window = round(MOTION_SUB_WINDOW_SEC * fs)
+    n = raw.size // window
+    if n < 2:
+        return 0.0
+    spreads = np.empty(n)
+    for i in range(n):
+        seg = ac[i * window:(i + 1) * window]
+        lo, hi = np.percentile(seg, [5, 95])
+        spreads[i] = abs(hi - lo)
+    spreads = spreads / abs(dc) * 100.0
+    mean = spreads.mean()
+    if mean < 1e-9:
+        return 0.0
+    return float((spreads.max() - spreads.min()) / mean)
+
+
+def infer_motion(ecg_wander_ratio: float, ppg: PpgResult | None) -> bool:
+    """Mirrors the motionRejected derivation in EcgAnalyser.analyse.
+
+    OR'd across both available signals, the same sensitivity-biased pattern
+    the two AF detectors use. The ECG side is always available; the PPG side
+    only corroborates when a simultaneous, usable capture exists.
+    """
+    ecg_flag = ecg_wander_ratio >= MOTION_WANDER_RATIO_GATE
+    ppg_flag = (
+        ppg is not None
+        and ppg.usable
+        and ppg.perfusion_stability_ratio >= MOTION_PERFUSION_INSTABILITY_GATE
+    )
+    return ecg_flag or ppg_flag
+
+
 def analyse_ppg(raw_ir, fs=PPG_FS) -> PpgResult:
     raw = np.asarray(raw_ir, dtype=float)
     if raw.size < fs * 5:
@@ -115,7 +183,8 @@ def analyse_ppg(raw_ir, fs=PPG_FS) -> PpgResult:
     ibi = np.diff(peaks).astype(float) * 1000.0 / fs
     feats = dsp.analyse_rr(ibi)  # same interval statistics as the ECG path
     return PpgResult(peaks, ibi, feats.meanHr, feats.irregularityScore, pi,
-                     feats.count >= 2, feats.count)
+                     feats.count >= 2, feats.count,
+                     perfusion_stability_ratio=perfusion_stability(raw, fs))
 
 
 @dataclass

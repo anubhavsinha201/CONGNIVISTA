@@ -18,7 +18,11 @@ from enum import Enum
 # ---- Constants: must match Policy in app/lib/core/policy.dart ----
 K_SQI_GATE = 0.5
 K_MIN_RR_INTERVALS = 30
-K_MOTION_VAR_GATE_MILLI_G = 150
+# Motion is inferred (ECG wander + PPG perfusion instability), not sensed by
+# an IMU threshold - see ppg_reference.MOTION_WANDER_RATIO_GATE and
+# MOTION_PERFUSION_INSTABILITY_GATE, and Policy in policy.dart. decide() below
+# takes the already-computed bool, same as it always has, so nothing here
+# actually changes behaviourally - this just removes the stale constant name.
 K_RR_IRREGULARITY_GATE = 0.5
 K_CNN_THRESHOLD_INT8 = None  # null until quantization_calibration.ipynb has run
 K_HR_LOW = 50.0

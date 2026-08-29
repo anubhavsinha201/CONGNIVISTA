@@ -65,23 +65,31 @@ invalidation and the result is **RETAKE**, never a tier.
 
 ---
 
-## 4. Status frame — 6 bytes, notified at 1 Hz
+## 4. Status frame — 4 bytes, notified at 1 Hz
 
 | Offset | Type | Field | Notes |
 |---|---|---|---|
-| 0 | `uint8` | `flags` | bit0 `LO+` off, bit1 `LO-` off, bit2 IMU ready, bit3 streaming |
+| 0 | `uint8` | `flags` | bit0 `LO+` off, bit1 `LO-` off, bit2 reserved, bit3 streaming |
 | 1 | `uint8` | `batteryPct` | 0-100, 255 = unknown |
-| 2 | `uint16` | `accelVarMilliG` | Accel magnitude variance over the last 1 s, in milli-g |
-| 4 | `uint16` | `lastEcgSeq` | `seq` of the most recent ECG frame sent |
+| 2 | `uint16` | `lastEcgSeq` | `seq` of the most recent ECG frame sent |
 
 ### Lead-off comes from hardware
 Bits 0 and 1 are read from the AD8232 `LO+` / `LO-` pins. Do **not** infer electrode
 detachment in software from a flat trace - the hardware already knows, and it knows faster.
 
-### Motion is summarised on-device
-We ship **variance per second**, not raw 3-axis at 250 Hz. The app only needs to answer
-"did the patient move during this window." Streaming raw IMU would multiply the BLE
-payload for no clinical gain.
+### Motion is inferred, not sensed
+There is no IMU in this build. The MPU-6050 that used to fill flag bit2 (`IMU ready`) and
+`accelVarMilliG` is not in the BOM; that bit is reserved rather than reused, so a firmware
+built against an earlier revision of this contract fails visibly instead of silently
+setting a bit the app no longer reads.
+
+Motion is inferred on the phone instead, from signals already present in the streams this
+device sends anyway: ECG baseline wander (`sqi.dart`) and, when a simultaneous contact-PPG
+capture exists, its perfusion-index instability (`contracts/ppg.md` section 5). Nothing
+new is added to the wire format for this - the ECG and PPG frames already carry everything
+the inference needs. See `Policy.kMotionWanderRatioGate` and
+`Policy.kMotionPerfusionInstabilityGate` in `contracts/tiers.md` section 4 for the
+thresholds, both marked PROVISIONAL until tuned against real disturbed-vs-still captures.
 
 ---
 

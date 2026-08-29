@@ -22,6 +22,19 @@ class PpgResult {
   /// AC/DC x 100. Below [PpgAnalyser.kPerfusionGate] the trace is untrustworthy.
   final double perfusionIndex;
 
+  /// Normalised spread of perfusion index across 1 s sub-windows of the
+  /// capture: (max - min) / mean. Zero for a steady contact, high when the
+  /// pulsatile signal swings up and down within one capture — which is what
+  /// happens when a finger shifts on the sensor mid-recording.
+  ///
+  /// Distinct from [perfusionIndex] itself: that catches a signal that is
+  /// UNIFORMLY weak (cold finger, low LED current); this catches one that is
+  /// unstable, which a uniformly weak signal is not. This is the PPG's
+  /// contribution to inferred motion detection, now that the MPU-6050 that
+  /// used to sense motion directly is no longer in the BOM. See
+  /// contracts/ppg.md.
+  final double perfusionStabilityRatio;
+
   /// Whether this capture may be used for anything at all.
   final bool usable;
 
@@ -36,6 +49,7 @@ class PpgResult {
     required this.meanPulseRate,
     required this.irregularityScore,
     required this.perfusionIndex,
+    this.perfusionStabilityRatio = 0.0,
     required this.usable,
     required this.features,
     this.failureReason,
@@ -66,6 +80,7 @@ class PpgResult {
         'meanPulseRate': meanPulseRate,
         'irregularityScore': irregularityScore,
         'perfusionIndex': perfusionIndex,
+        'perfusionStabilityRatio': perfusionStabilityRatio,
         'beatCount': features.count,
         'usable': usable,
         'prescreenOutcome': prescreenOutcome,
@@ -115,6 +130,12 @@ class PpgAnalyser {
 
   /// Same gate value as the ECG rules, on the same scale, by construction.
   static const double kIrregularityGate = 0.5;
+
+  /// Sub-window length for [_perfusionStability]. Short enough that a finger
+  /// shift shows up as a swing between windows, long enough to contain
+  /// several pulses per window so a single-window perfusion index is not
+  /// itself noise.
+  static const double kMotionSubWindowSec = 1.0;
 
   static const RrAnalyser _intervals = RrAnalyser();
 
@@ -174,6 +195,7 @@ class PpgAnalyser {
       meanPulseRate: feats.meanHr,
       irregularityScore: feats.irregularityScore,
       perfusionIndex: perfusion,
+      perfusionStabilityRatio: _perfusionStability(rawIr),
       usable: feats.count >= 2,
       features: feats,
     );
@@ -198,6 +220,65 @@ class PpgAnalyser {
     final hi = sorted[(sorted.length * 0.95).floor()];
 
     return ((hi - lo).abs() / dc.abs()) * 100.0;
+  }
+
+  /// Spread of local AC amplitude across 1 s sub-windows, normalised by the
+  /// capture's overall DC level.
+  ///
+  /// Zero for a uniformly steady contact, whether that contact is good or bad
+  /// — a uniformly weak signal is [kPerfusionGate]'s job, not this one's. High
+  /// only when the signal quality itself swings during the capture, which is
+  /// the PPG-side signature of the finger moving.
+  ///
+  /// Filters the WHOLE capture once, then measures local spread on the
+  /// already-filtered signal — NOT by recomputing [_perfusionIndex]
+  /// independently on each short sub-window. A 0.5 Hz highpass needs on the
+  /// order of seconds to settle; re-running it from scratch on an isolated
+  /// 100-sample (1 s) slice produces filter-edge noise of the same order as
+  /// the physiological signal being measured, which swamped this metric with
+  /// spurious instability on a perfectly steady synthetic capture during
+  /// validation (`ml/reference/validate_ppg.py`). Filtering once and then
+  /// windowing the result is what makes the measurement mean what it says.
+  double _perfusionStability(Float64List raw) {
+    var dc = 0.0;
+    for (final v in raw) {
+      dc += v;
+    }
+    dc /= raw.length;
+    if (dc.abs() < 1e-9) return 0.0;
+
+    final ac = FilterChain.ppgBand(fs).filtfilt(raw);
+    final window = (kMotionSubWindowSec * fs).round();
+    final n = raw.length ~/ window;
+    if (n < 2) return 0.0;
+
+    final spreads = Float64List(n);
+    for (var i = 0; i < n; i++) {
+      // Copy before sorting, matching _perfusionIndex above: a sublistView
+      // shares the underlying buffer, so sorting it in place would mutate ac
+      // itself. Harmless today (disjoint ranges, ac unused after this loop),
+      // but a copy is what keeps that true if this function is ever refactored.
+      final seg = Float64List.fromList(
+          ac.sublist(i * window, (i + 1) * window))
+        ..sort();
+      final lo = seg[(seg.length * 0.05).floor()];
+      final hi = seg[(seg.length * 0.95).floor()];
+      spreads[i] = (hi - lo).abs() / dc.abs() * 100.0;
+    }
+
+    var mean = 0.0;
+    for (final s in spreads) {
+      mean += s;
+    }
+    mean /= spreads.length;
+    if (mean < 1e-9) return 0.0;
+
+    var maxV = spreads.first, minV = spreads.first;
+    for (final s in spreads) {
+      if (s > maxV) maxV = s;
+      if (s < minV) minV = s;
+    }
+    return (maxV - minV) / mean;
   }
 
   /// Systolic peak detection on the bandpassed signal.

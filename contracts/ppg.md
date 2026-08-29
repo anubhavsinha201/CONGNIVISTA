@@ -39,6 +39,11 @@ Secondary benefits, in honest order of value:
    it could not otherwise know.
 3. **Independent quality evidence.** Perfusion index gives a contact-quality measure that
    does not depend on the ECG electrodes at all.
+4. **Motion inference.** With the MPU-6050 no longer in the BOM, nothing on the sensor
+   unit senses motion directly. Perfusion-index instability across a capture — the signal
+   swinging up and down as a finger shifts on the sensor — is patient-side evidence of
+   movement, and it corroborates the ECG's own baseline-wander signal (`sqi.dart`) in the
+   inferred-motion gate. See section 5.
 
 **Out of scope:** SpO2. The MAX30102's red channel supports it, but oxygen saturation is
 a different clinical question with its own validation burden. Roadmap, not this build.
@@ -47,12 +52,10 @@ a different clinical question with its own validation burden. Roadmap, not this 
 
 ## 2. Hardware
 
-MAX30102 on the **same I²C bus** as the MPU-6050. No address conflict:
-
-| Device | I²C address |
-|---|---|
-| MAX30102 | `0x57` |
-| MPU-6050 | `0x68` |
+MAX30102 at I²C address `0x57`. It is the **only** I²C device in this build — the
+MPU-6050 that an earlier revision of this contract paired it with is not in the BOM. See
+`contracts/ble.md` section 4 for what that removal changes about the status frame, and
+section 5 below for how motion detection is replaced rather than dropped.
 
 Configuration:
 
@@ -123,6 +126,22 @@ IR counts (100 Hz)
 component and DC is the mean raw level. Below ~0.3% the trace is not trustworthy —
 usually a cold finger, poor contact, or too little LED current. This is the PPG's
 signal-quality gate and is the exact analogue of `sqi.dart` for the ECG.
+
+### Perfusion stability — the PPG's motion signal
+
+A **separate** measure from perfusion index itself: how much the perfusion index varies
+across 1 s sub-windows of the capture, normalised by the capture's overall DC level. Zero
+for a steady contact regardless of whether that contact is good or bad — a uniformly weak
+signal is the perfusion-index gate's job, not this one's — and high only when signal
+quality swings within a single capture, which is what a shifting finger produces.
+
+Computed by filtering the **whole** capture once, then measuring local amplitude spread on
+the already-filtered signal. Re-running the bandpass from scratch on each short sub-window
+independently was tried first and rejected: a 0.5 Hz highpass needs on the order of
+seconds to settle, and filtering an isolated ~1 s slice produces edge-transient noise of
+the same order as the physiological signal being measured — large enough to make a
+perfectly steady synthetic capture read as unstable during validation
+(`ml/reference/validate_ppg.py`). Filter once, window the result.
 
 ---
 
