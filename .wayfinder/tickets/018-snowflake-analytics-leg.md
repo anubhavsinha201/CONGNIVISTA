@@ -91,6 +91,6 @@ correctly rolled it into a `village-042`/`GREEN`/2026-08-30 row. This is map.md'
 destination bar for this leg — "queryable in Snowflake from real synced data, not sample
 rows" — now genuinely met, not the narrower version noted above.
 
-Two harmless synthetic rows now sit in the real `screenings` table (this one, plus the
-earlier hand-built `verify-018-...` row) — both worth clearing before an actual demo,
-alongside ticket 017's matching test record in Atlas.
+**Cleaned up 2026-08-30:** both synthetic rows (this one and the earlier hand-built
+`verify-018-...` row) deleted from `screenings`. Confirmed empty. Atlas's matching test
+record was deleted in the same pass — see ticket 017.

@@ -46,11 +46,9 @@ default). Confirmed real, not just a successful driver handshake:
    `village-042`, `patientPseudoId a1b2c3d4e5f60718`) — a real read through the
    application's actual query/sort path, not a bypassed check.
 
-**One housekeeping note:** that POST left one synthetic test record
-(`3f2504e0-4f89-41d3-9a0c-a1a1a1a1a1a1`) sitting in the real `arogyax` database on
-Atlas. Harmless (obviously fake data, no real PII — it never handles PII to begin with),
-but worth clearing before this cluster is used for an actual demo, so a judge doesn't
-see a stray test row mixed into real screenings.
+**Cleaned up 2026-08-30:** that synthetic test record (`3f2504e0-4f89-41d3-9a0c-a1a1a1a1a1a1`)
+was deleted from `arogyax.screenings` after ticket 018 finished using it to verify the
+Snowflake export. Atlas is back to zero real or synthetic rows.
 
 The 40-test suite (`npm test`) was **not** re-run against Atlas — those are unit tests
 against `MemoryRepo` by design (fast, no external dependency for CI); this ticket's
