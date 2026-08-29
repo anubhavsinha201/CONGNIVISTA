@@ -234,9 +234,11 @@ void ppgTimerCallback(void* /*arg*/) {
 class ServerCallbacks : public BLEServerCallbacks {
   void onConnect(BLEServer* /*server*/) override {
     g_deviceConnected = true;
+    Serial.println("BLE: phone/app connected");
   }
   void onDisconnect(BLEServer* server) override {
     g_deviceConnected = false;
+    Serial.println("BLE: disconnected - advertising again");
     // Without this the device goes permanently invisible after the first
     // disconnect - a well-known ESP32 BLE gotcha, not optional here.
     server->startAdvertising();
@@ -257,16 +259,20 @@ class ControlCallbacks : public BLECharacteristicCallbacks {
       case 0x01: // start
         g_streaming = true;
         g_autoStopAtMs = 0;
+        Serial.println("Control: start streaming");
         break;
       case 0x02: // stop
         g_streaming = false;
         g_autoStopAtMs = 0;
+        Serial.println("Control: stop streaming");
         break;
       case 0x03: // start for `arg` seconds, then auto-stop
         g_streaming = true;
         g_autoStopAtMs = millis() + (uint32_t)arg * 1000UL;
+        Serial.printf("Control: start streaming for %u s\n", arg);
         break;
       default:
+        Serial.printf("Control: unknown opcode 0x%02X - ignored\n", opcode);
         break; // unknown opcode - ignore, do not crash on a malformed write
     }
   }
@@ -280,6 +286,8 @@ void setupBle() {
   esp_read_mac(mac, ESP_MAC_BT);
   char deviceName[24];
   snprintf(deviceName, sizeof(deviceName), "ArogyaX-%02X%02X", mac[4], mac[5]);
+  Serial.print("BLE device name: ");
+  Serial.println(deviceName);
 
   BLEDevice::init(deviceName);
   g_server = BLEDevice::createServer();
@@ -417,34 +425,49 @@ void handleAutoStop() {
 }
 
 // ---------------------------------------------------------------------------
+// Every line below prints something on purpose. The first time this runs on
+// real hardware, the serial monitor is the only window into whether each
+// stage actually worked - silence is indistinguishable from "still booting"
+// and from "crashed", so each stage says so explicitly.
+// ---------------------------------------------------------------------------
 void setup() {
   Serial.begin(115200);
+  delay(300); // let the USB-serial link settle before the first print
+  Serial.println();
+  Serial.println("=== ArogyaX sensor unit booting ===");
 
   pinMode(kLoPlusPin, INPUT);
   pinMode(kLoMinusPin, INPUT);
 
   analogReadResolution(12); // 0-4095, matches the "ADC value minus 2048" contract
   analogSetPinAttenuation(kEcgPin, ADC_11db); // ~0-3.3 V range for the AD8232's biased swing
+  Serial.println("ECG pins configured (GPIO34 analog in, GPIO32/33 lead-off)");
 
   Wire.begin(kSdaPin, kSclPin);
   g_ppgAvailable = g_ppgSensor.begin(Wire, I2C_SPEED_FAST);
   if (g_ppgAvailable) {
     g_ppgSensor.setup(kPpgLedBrightness, kPpgSampleAverage, kPpgLedMode,
                        kPpgSampleRateHz, kPpgPulseWidthUs, kPpgAdcRange);
+    Serial.println("MAX30102 found on I2C - PPG available");
   } else {
     // No MAX30102 found. ECG-only capture still works - PPG fusion and
     // PPG-derived motion inference are simply unavailable, same as any
     // other capture where "a simultaneous contact-PPG capture exists" is
     // false (ble.md section 4, ppg.md section 6).
-    Serial.println("MAX30102 not found - continuing ECG-only");
+    Serial.println("MAX30102 NOT found on I2C (check SDA=21/SCL=22 wiring) - continuing ECG-only");
   }
 
   setupBle();
+  Serial.println("BLE advertising started - look for it in a BLE scanner app");
+
   setupTimers(); // both timers run continuously; g_streaming gates real work
+  Serial.println("Sampling timers armed (idle until a Start command arrives)");
 
   // Firmware boots not streaming - the app explicitly starts it (ble.md
   // section 5), so battery isn't spent sampling before anyone asked for it.
   g_streaming = false;
+
+  Serial.println("=== Boot complete - waiting for a BLE connection ===");
 }
 
 void loop() {
