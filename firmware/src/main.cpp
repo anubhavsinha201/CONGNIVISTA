@@ -1,15 +1,19 @@
-// ArogyaX sensor unit firmware — ESP32-S3 + AD8232 (ECG) + MAX30102 (contact PPG).
+// ArogyaX sensor unit firmware — ESP32 (classic) + AD8232 (ECG) + MAX30102
+// (contact PPG).
 //
 // Implements the wire format in contracts/ble.md and contracts/ppg.md exactly
-// (both LOCKED — this file must match them, not the other way around). No IMU:
-// the MPU-6050 is not in the BOM: see ble.md section 4 and ppg.md section 5 for
-// why motion is inferred on the phone instead of sensed here.
+// (both LOCKED — this file must match them, not the other way around). No IMU
+// and no display: the MPU-6050 is not in the BOM (removed by ticket 006 — see
+// ble.md section 4 and ppg.md section 5 for why motion is inferred on the
+// phone instead of sensed here), and there is no product spec anywhere for an
+// OLED, so neither is wired here even if one happens to be sitting on the same
+// breadboard's I2C bus.
 //
 // STATUS: written against the contracts, never compiled. No PlatformIO/ESP32
 // toolchain is available in the environment this was written in. Before the
 // first flash (ticket 013, after ticket 003 confirms the electrode wiring):
-//   - Verify the PIN ASSIGNMENTS block below against the actual breadboard —
-//     nothing in the repo locks these down; they are this file's own choice.
+//   - Pin numbers below now come from a confirmed wiring map, not a guess —
+//     still worth a visual check against the breadboard before power-on.
 //   - Verify the MAX3010x library's setup()/check()/getFIFOIR()/nextSample()
 //     signatures against whatever version PlatformIO resolves — this file was
 //     written against the long-stable public API, not a pinned version.
@@ -42,15 +46,20 @@
 #include "MAX30105.h"
 
 // ---------------------------------------------------------------------------
-// PIN ASSIGNMENTS — not specified by any contract. VERIFY AGAINST THE ACTUAL
-// BREADBOARD (ticket 003) before flashing; change freely, nothing downstream
-// depends on the exact numbers.
+// PIN ASSIGNMENTS — from the confirmed wiring map (classic ESP32). Not
+// contract-mandated (contracts/ble.md and ppg.md don't specify GPIO numbers),
+// but these specific ones are the real board, not a placeholder — double
+// check against the breadboard once more at flash time regardless.
+//
+// MAX30102 is the only I2C device wired here, matching contracts/ppg.md
+// section 2 ("It is the only I2C device in this build") and ticket 006's
+// removal of the MPU-6050. No OLED — no contract specifies one.
 // ---------------------------------------------------------------------------
-constexpr int kEcgPin      = 4;   // AD8232 OUTPUT -> ADC1_CH3 on ESP32-S3
-constexpr int kLoPlusPin   = 5;   // AD8232 LO+
-constexpr int kLoMinusPin  = 6;   // AD8232 LO-
-constexpr int kSdaPin      = 8;   // MAX30102 SDA
-constexpr int kSclPin      = 9;   // MAX30102 SCL
+constexpr int kEcgPin      = 34;  // AD8232 OUTPUT -> ADC1_CH6 (input-only pin, fine for analogRead)
+constexpr int kLoPlusPin   = 32;  // AD8232 LO+
+constexpr int kLoMinusPin  = 33;  // AD8232 LO-
+constexpr int kSdaPin      = 21;  // MAX30102 SDA
+constexpr int kSclPin      = 22;  // MAX30102 SCL
 
 // ---------------------------------------------------------------------------
 // contracts/ble.md section 1 — GATT layout. Do not change without updating
