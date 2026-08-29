@@ -106,7 +106,7 @@ cd server && docker compose up -d && npm start        # against local MongoDB
 cd server && MONGO_URI="mongodb+srv://..." npm start  # against Atlas
 cd dashboard && python -m http.server 8080            # needs the server on :8787
 
-# --- Firmware (not yet written) ---
+# --- Firmware (drafted, never compiled — no PlatformIO in this environment) ---
 cd firmware && pio run -t upload && pio device monitor -b 115200
 ```
 
@@ -125,7 +125,7 @@ Only mark something built after checking — several directories are still empty
 | `app/lib/data/` | **Built, never compiled.** Offline queue (SQLCipher), pseudo-ID, sync engine, scheduler. Logic verified through the Python mirror, not by a Dart run. |
 | `server/` | **Built and tested.** 33 passing tests plus a live end-to-end run. MongoDB sync service — see [server/README.md](server/README.md). |
 | `dashboard/` | **Built.** Static referral queue + risk map, no CDN. |
-| `firmware/` | **Empty.** |
+| `firmware/` | **Drafted, never compiled.** No PlatformIO in this environment — see ticket 013. |
 | `app/assets/replay/` | **Empty** — no replay traces yet, so `ReplaySource` has nothing to play. |
 | App UI, BLE, `SignalSource`, Tamil strings | **Not written.** |
 
