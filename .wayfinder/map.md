@@ -41,7 +41,10 @@ Reached when a stranger can be handed the phone and the unit and walk that loop.
 
 ## Decisions so far
 
-*(none yet — this is the first working session)*
+- [008 — Schema v4: age band and village](tickets/008-schema-v4-demographics.md) —
+  `ageBand`/`villageCode` required, `sex`/BP/`glucose` optional; also fixed a stale
+  v2→v3 schema-version drift and a duplicate-argument compile bug found along the way.
+  `8f4f857`.
 
 ## Not yet specified
 
