@@ -44,7 +44,8 @@ Commercial portable ECGs exist (e.g. Spandan ~₹5,500, Agatsa SanketLife ~₹4,
 ArogyaX plugs the rhythm-shaped hole in MTM with three pieces:
 
 1. **A ~₹2,500 sensor unit** — a single-lead (lead II) ECG front-end (AD8232) plus a
-   contact PPG sensor (MAX30102), driven by an ESP32-S3, streaming to the phone over
+   contact PPG sensor (MAX30102), driven by a classic ESP32 (GPIO32/33/34 for the AD8232
+   are ADC1-capable only on the original ESP32, not the S3), streaming to the phone over
    Bluetooth. Motion is inferred from these two signals rather than sensed by a dedicated
    accelerometer (§5.3).
 2. **The worker's own phone as the compute** — a quantized on-device model reads the rhythm and outputs a referral priority tier, fully offline. Marginal compute cost per additional worker: ₹0.
@@ -115,7 +116,7 @@ ArogyaX measures this shift and refits the decision threshold on the quantized m
 
 | Item | Cost |
 |---|---|
-| Sensor unit (ESP32-S3 + AD8232 + MAX30102 + battery + enclosure) | **≈ ₹1,840–2,880 per station** |
+| Sensor unit (ESP32 + AD8232 + MAX30102 + battery + enclosure) | **≈ ₹1,840–2,880 per station** |
 | Phone (already owned by the worker) | **₹0** |
 | Recurring — ECG electrodes | **₹8–15 per patient** |
 
