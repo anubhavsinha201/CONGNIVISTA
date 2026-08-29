@@ -80,6 +80,26 @@ would reach a health worker's screen — which this product never displays.
 consumers: the Dart record class, `src/validate.js`, and
 `ml/reference/validate_record.py`.
 
+## Analytics export (Snowflake)
+
+`scripts/export_to_snowflake.js` — ticket 018, [contracts/analytics.md](../contracts/analytics.md).
+Additive: reads the `screenings` collection, writes a Snowflake fact table plus a
+`district_tier_trends` rollup view, and does not sit in front of anything above. Not
+triggered by this service; run manually or from an external scheduler.
+
+```bash
+SNOWFLAKE_ACCOUNT=… SNOWFLAKE_USER=… SNOWFLAKE_PASSWORD=… \
+SNOWFLAKE_WAREHOUSE=… SNOWFLAKE_DATABASE=… SNOWFLAKE_SCHEMA=… \
+npm run export:snowflake                                   # every screening
+npm run export:snowflake -- --since 2026-08-29T00:00:00Z   # incremental
+```
+
+Exports 12 fields only — `recordId`, `patientPseudoId`, `phcId`, `capturedAt`, `ageBand`,
+`villageCode`, `sex`, `tier`, `referralState`, `clinicianOutcome`, `clinicianOutcomeAt`,
+`modelVersion` — never `whvId`, raw ECG/PPG signal fields, or `lat`/`lon`
+(contracts/analytics.md §2). No new PII risk: `patientPseudoId` is already a salted,
+on-device hash before it reaches Mongo.
+
 ## Known gaps
 
 - **Dashboard endpoints are unauthenticated.** Fine on a PHC's internal network,

@@ -9,12 +9,14 @@
   },
   "scripts": {
     "start": "node src/server.js",
-    "test": "node --test \"test/**/*.test.js\""
+    "test": "node --test \"test/**/*.test.js\"",
+    "export:snowflake": "node scripts/export_to_snowflake.js"
   },
   "dependencies": {
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
     "express": "^4.21.1",
-    "mongodb": "^6.9.0"
+    "mongodb": "^6.9.0",
+    "snowflake-sdk": "^3.2.0"
   }
 }

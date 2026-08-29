@@ -111,11 +111,18 @@ python ml/reference/validate_record.py
 
 # --- Sync service + PHC dashboard ---
 cd server && npm install
-cd server && npm test                  # 33 tests, no database required
+cd server && npm test                  # 47 tests, no database required
 cd server && DEMO=1 npm start          # in-memory, nothing to install
 cd server && docker compose up -d && npm start        # against local MongoDB
 cd server && MONGO_URI="mongodb+srv://..." npm start  # against Atlas
 cd dashboard && python -m http.server 8080            # needs the server on :8787
+
+# --- Snowflake analytics export [ticket 018, contracts/analytics.md] ---
+# Additive: reads MongoDB, writes Snowflake, touches nothing else. SNOWFLAKE_ACCOUNT /
+# SNOWFLAKE_USER / SNOWFLAKE_PASSWORD / SNOWFLAKE_WAREHOUSE / SNOWFLAKE_DATABASE /
+# SNOWFLAKE_SCHEMA as env vars only — same rule as MONGO_URI, never committed.
+cd server && npm run export:snowflake                              # full export
+cd server && npm run export:snowflake -- --since 2026-08-29T00:00:00Z  # incremental
 
 # --- Firmware (drafted, never compiled — no PlatformIO in this environment) ---
 cd firmware && pio run -t upload && pio device monitor -b 115200
@@ -135,7 +142,8 @@ Only mark something built after checking — several directories are still empty
 | `app/assets/models/af_int8.tflite` | **Shipped.** seed 0, calibrated. Still the right model file for the Kotlin port to load. |
 | `app/lib/data/` | **Superseded, kept as the port reference.** Offline queue (SQLCipher), pseudo-ID, sync engine, scheduler — same status as `app/lib/signal/` above. |
 | `android/` | **Not yet scaffolded.** Toolchain (Android Studio) installing as of 2026-08-30 — ticket 019. |
-| `server/` | **Built and tested.** 33 passing tests plus a live end-to-end run. MongoDB sync service — see [server/README.md](server/README.md). |
+| `server/` | **Built and tested.** 47 passing tests plus a live end-to-end run. MongoDB sync service — see [server/README.md](server/README.md). |
+| `server/scripts/export_to_snowflake.js` | **Code written, unit-tested against a fake connection — not yet run against the live account.** Ticket 018, [contracts/analytics.md](contracts/analytics.md). Additive: reads MongoDB, writes Snowflake, touches nothing else. |
 | `dashboard/` | **Built.** Static referral queue + risk map, no CDN. |
 | `firmware/` | **Drafted, never compiled.** No PlatformIO in this environment — see ticket 013. |
 | `app/assets/replay/` | **Empty** — no replay traces yet, so `ReplaySource` has nothing to play. |
