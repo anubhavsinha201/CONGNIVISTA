@@ -24,7 +24,12 @@ K_MIN_RR_INTERVALS = 30
 # takes the already-computed bool, same as it always has, so nothing here
 # actually changes behaviourally - this just removes the stale constant name.
 K_RR_IRREGULARITY_GATE = 0.5
-K_CNN_THRESHOLD_INT8 = None  # null until quantization_calibration.ipynb has run
+# Mirrors Policy.kCnnThresholdInt8 in app/lib/core/policy.dart. This mirror sat
+# at None (the pre-calibration placeholder) long after the real value was
+# actually measured and shipped in Dart -- a standalone gap, unrelated to the
+# 2026-08-29 retrain, caught while reconciling that retrain. Kept in sync by
+# hand with policy.dart and ml/evaluate.py.
+K_CNN_THRESHOLD_INT8 = 0.1875
 K_HR_LOW = 50.0
 K_HR_HIGH = 120.0
 K_RULES_VERSION = "rules-1.0"
@@ -192,10 +197,25 @@ def main():
           is Tier.RED)
 
     print("\nDetector combination")
-    check("rules alone escalate when the CNN has not shipped",
+    check("rules alone decide when no CNN score is supplied",
           decide(irregularity=0.8).decided_by is DecidedBy.RULES)
-    check("CNN score ignored while the INT8 threshold is uncalibrated",
-          decide(irregularity=0.1, cnn=0.99).tier is Tier.GREEN)
+
+    # The INT8 threshold IS calibrated now (0.1875, refit 2026-08-29 against
+    # the current seed-0 model) -- these replace the old "uncalibrated, so the
+    # CNN is ignored" checks with real coverage of the path that ships.
+    check("a high CNN score alone escalates past GREEN",
+          decide(irregularity=0.1, cnn=0.99, hr=72).tier is not Tier.GREEN)
+    check("...attributed to the CNN, not the rules",
+          decide(irregularity=0.1, cnn=0.99, hr=72).decided_by is DecidedBy.CNN)
+    check("a CNN score below threshold does not escalate on its own",
+          decide(irregularity=0.1, cnn=0.10, hr=72).tier is Tier.GREEN)
+    check("rules and CNN agreeing is attributed to both",
+          decide(irregularity=0.8, cnn=0.99, hr=72).decided_by
+          is DecidedBy.RULES_AND_CNN)
+    check("CNN score exactly at the gate escalates",
+          decide(irregularity=0.1, cnn=K_CNN_THRESHOLD_INT8, hr=72).tier
+          is not Tier.GREEN)
+
     check("version string records rules only",
           version_for(DecidedBy.RULES) == K_RULES_VERSION)
     check("version string records the CNN when it ran",

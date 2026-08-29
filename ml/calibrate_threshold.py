@@ -198,7 +198,13 @@ def _plot(files, rows, drops) -> None:
     ax[0].plot(grid, se_i8, color=I8_C, lw=2, label="INT8 (discrete steps)")
     ax[0].axhline(0.90, color="k", ls="--", lw=1.2, label="target Se = 0.90")
     ax[0].axvline(r0["threshold_fp32"], color="k", ls=":", lw=1.2)
-    ax[0].set_xlim(0, 0.10)
+    # Framed around whichever thresholds this run actually produced, not a
+    # fixed range picked for one model's numbers. A hardcoded (0, 0.10) here
+    # once quietly clipped a refitted threshold of 0.1875 off the visible
+    # axis entirely after a retrain moved it - the chart still "worked", it
+    # was just showing the reader a threshold that no longer existed.
+    x_max = max(r0["threshold_fp32"], r0["threshold_int8_refit"]) * 1.6
+    ax[0].set_xlim(0, max(0.10, x_max))
     ax[0].set_ylim(0.80, 1.005)
     ax[0].set_xlabel("threshold")
     ax[0].set_ylabel("sensitivity")

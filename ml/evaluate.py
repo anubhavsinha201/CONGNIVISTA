@@ -36,8 +36,10 @@ FS = 250.0
 SHIPPED_SEED = 0
 
 # From app/lib/core/policy.dart -- kept in sync by hand; both derive from
-# ml/calibrate_threshold.py.
-K_CNN_THRESHOLD_INT8 = 0.007812
+# ml/calibrate_threshold.py. Updated 2026-08-29 alongside the seed-0 retrain;
+# see the doc comment on Policy.kCnnThresholdInt8 for what carrying the old
+# value (0.007812) over to the new model did.
+K_CNN_THRESHOLD_INT8 = 0.1875
 K_RR_IRREGULARITY_GATE = 0.5
 
 # docs/PRODUCT.md section 2: community screening in rural Gujarat found ~5.1%

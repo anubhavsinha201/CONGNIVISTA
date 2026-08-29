@@ -175,6 +175,33 @@ void main() {
         ? 'INT8 threshold now calibrated; this test covered the pre-calibration state'
         : null);
 
+    // The threshold IS calibrated now (0.1875, refit 2026-08-29 against the
+    // current seed-0 model — see the doc comment on kCnnThresholdInt8). These
+    // replace the skipped test above with real coverage of the path that
+    // actually ships, mirrored in ml/reference/validate_policy.py.
+    test('a high CNN score alone escalates past GREEN, attributed to the CNN',
+        () {
+      final d = Policy.decide(inputs(irregularity: 0.1, cnn: 0.99, hr: 72));
+      expect(d.tier, isNot(Tier.green));
+      expect(d.decidedBy, DecidedBy.cnn);
+    });
+
+    test('a CNN score below threshold does not escalate on its own', () {
+      final d = Policy.decide(inputs(irregularity: 0.1, cnn: 0.10, hr: 72));
+      expect(d.tier, Tier.green);
+    });
+
+    test('rules and CNN agreeing is attributed to both', () {
+      final d = Policy.decide(inputs(irregularity: 0.8, cnn: 0.99, hr: 72));
+      expect(d.decidedBy, DecidedBy.rulesAndCnn);
+    });
+
+    test('a CNN score exactly at the gate escalates', () {
+      final d = Policy.decide(
+          inputs(irregularity: 0.1, cnn: Policy.kCnnThresholdInt8, hr: 72));
+      expect(d.tier, isNot(Tier.green));
+    });
+
     test('version string records which detectors ran', () {
       expect(Policy.versionFor(DecidedBy.rules), Policy.kRulesVersion);
       expect(Policy.versionFor(DecidedBy.rulesAndCnn), contains(Policy.kCnnVersion));

@@ -203,23 +203,34 @@ class Policy {
   /// has been run, and while it is null the CNN path is simply not used — we do
   /// not fall back to a guess.
   ///
-  /// MEASURED 2026-08-28, seed 0, CinC 2017 record-disjoint test split
+  /// MEASURED 2026-08-29, seed 0, CinC 2017 record-disjoint test split
   /// (1364 windows, 124 AF). Target sensitivity 0.90:
   ///
-  ///   FP32 threshold carried over naively -> Se 0.895, Sp 0.830
-  ///   refitted on INT8 scores             -> Se 0.919, Sp 0.810
+  ///   FP32 threshold carried over naively -> Se 0.895, Sp 0.812
+  ///   refitted on INT8 scores             -> Se 0.911, Sp 0.804
   ///
   /// Across 5 seeds the sensitivity lost by carrying the FP32 threshold over was
   /// +0.008 mean, sd 0.005, range [0.000, 0.016]. The variance is the point: the
   /// shift cannot be predicted in advance, so it has to be measured per build.
   ///
-  /// Note the refit lands on 0.919 rather than 0.903. That is not sloppiness —
-  /// the INT8 output is a single int8, so the whole test set falls on 57–88
-  /// distinct scores in steps of 1/256, and only 11–21 operating points exist
-  /// anywhere in Se ∈ [0.80, 0.98]. There is no threshold that yields 0.90.
-  /// Quantisation does not merely shift the operating point, it collapses which
-  /// operating points are reachable at all.
-  static const double? kCnnThresholdInt8 = 0.007812;
+  /// SUPERSEDES a 2026-08-28 value of 0.007812. The seed-0 model was retrained
+  /// on 2026-08-29 (same architecture, different weights — full-integer
+  /// quantisation is not bit-reproducible run to run), which moved this
+  /// threshold from 0.007812 to 0.1875: a 24x change in the raw number, for a
+  /// near-identical operating point (Se/Sp barely moved). Before this was
+  /// caught, `ml/evaluate.py` had been re-run against the new model while
+  /// still using the old threshold, and reported Sp 0.460 for the CNN alone —
+  /// not a worse model, but the exact failure this constant's own doc comment
+  /// warns about, reproduced by accident inside this project's own artifacts
+  /// directory: a threshold fit for one model, silently carried over to a
+  /// different one. `app/assets/models/af_int8.tflite` re-synced to match.
+  ///
+  /// The INT8 output is a single int8, so the whole test set falls on ~90
+  /// distinct scores in steps of 1/256, and roughly a dozen operating points
+  /// exist anywhere in Se ∈ [0.80, 0.98]. Quantisation does not merely shift
+  /// the operating point, it collapses which operating points are reachable
+  /// at all — see ml/artifacts/calibration.png.
+  static const double? kCnnThresholdInt8 = 0.1875;
 
   // ---- Rate --------------------------------------------------------------
 

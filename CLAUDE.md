@@ -157,31 +157,46 @@ inducing AF in a teammate.
 
 ## Current state — measured, not assumed
 
-CinC 2017 record-disjoint test split, 1364 windows, 124 AF (9.1%). From `ml/evaluate.py`:
+CinC 2017 record-disjoint test split, 1364 windows, 124 AF (9.1%). From `ml/evaluate.py`,
+2026-08-29 (re-run after the fixes below; see `ml/artifacts/evaluation.json`):
 
 | Detector | Se | Sp | PPV | F1 |
 |---|---|---|---|---|
-| RR rules only (gate 0.50) | 0.960 | **0.497** | 0.160 | 0.275 |
-| INT8 CNN only | 0.919 | 0.810 | 0.326 | 0.481 |
-| Rules OR CNN (what ships) | 1.000 | **0.429** | 0.149 | 0.259 |
+| RR rules only (refit, gate 0.50) | 0.750 | 0.848 | 0.330 | 0.458 |
+| INT8 CNN only (refit threshold) | 0.911 | 0.804 | 0.317 | 0.471 |
+| Rules OR CNN (what ships) | 0.952 | 0.706 | 0.244 | 0.389 |
 
-**Known defect: the rules gate at 0.50 is miscalibrated.** Non-AF windows average a rule
-score of 0.536, so half of healthy people fire it. The logistic centres in
-`rr_features.dart` are literature-derived placeholders marked `PROVISIONAL` — a threshold
-never fitted on the data it is applied to, which is the same error the INT8 calibration
-work exists to fix. At 5.1% field prevalence the OR configuration yields ~54 false alarms
-per 100 screened. Raising the gate to ~0.95 gives Se 0.952 / Sp 0.773; the real fix is
-refitting the constants against MIT-BIH AFDB (downloaded, `ml/data/afdb.zip`).
+At field prevalence (5.1%), per 100 screened: **4.9 true AF flagged, 27.9 false alarms,
+0.2 AF missed** — roughly 1 in 7 referrals is real. Substantially better than this
+project's own history: the rules gate previously fired on ~50% of healthy people
+(Sp 0.497) and the combined OR ran at Sp 0.429 / ~54 false alarms per 100.
 
-**INT8 calibration** (the differentiator, `Policy.kCnnThresholdInt8 = 0.007812`): carrying
-the FP32 threshold over costs +0.008 mean sensitivity (sd 0.005, range 0.000–0.016 across
-5 seeds). More striking, the INT8 output is a single int8, so the test set lands on 57–88
-distinct scores in steps of 1/256 against 1364 for FP32 — only 11–21 operating points
-exist anywhere in Se ∈ [0.80, 0.98]. Quantisation does not merely shift the operating
-point, it collapses which points are reachable.
+**Fixed: the rules gate.** The logistic centres in `rr_features.dart` were
+literature-derived placeholders, never fitted to data. Refit against MIT-BIH AFDB via
+`ml/reference/tune_rr_thresholds.py` (5-fold CV: Sp 0.702→0.911) and confirmed on the
+independent CinC 2017 split above (Sp 0.497→0.848) — cross-dataset agreement, not an
+AFDB-only artefact.
+
+**Caught: a live instance of the exact failure the INT8 calibration work exists to
+name.** The seed-0 CNN was retrained on 2026-08-29 — same architecture, different
+weights, since full-integer quantisation is not bit-reproducible run to run — which moved
+its correctly-fit threshold from 0.007812 to **0.1875**, a 24x change for a near-identical
+operating point. Before this was caught, `ml/evaluate.py` had been re-run against the new
+model while `Policy.kCnnThresholdInt8` still held the old value, and reported Sp 0.460 for
+the CNN alone: not a worse model, but a threshold fit for one model silently carried over
+to another, reproduced by accident inside this project's own artifacts directory.
+`app/assets/models/af_int8.tflite` re-synced to the current `ml/artifacts/af_int8_seed0.tflite`
+— they had also drifted apart (same size, different bytes).
+
+**Still true:** the INT8 output is a single int8, so the test set lands on ~90 distinct
+scores in steps of 1/256 against 1364 for FP32 — roughly a dozen operating points exist
+anywhere in Se ∈ [0.80, 0.98]. Quantisation does not merely shift the operating point, it
+collapses which points are reachable. See `ml/artifacts/calibration.png`.
 
 **Unfitted thresholds** (targets, not results): `kPulseDeficitBpm`,
-`kPerfusedBeatFractionLow` — no paired ECG+PPG AF dataset exists in this build.
+`kPerfusedBeatFractionLow`, and the two inferred-motion gates
+(`kMotionWanderRatioGate`, `kMotionPerfusionInstabilityGate`) — no paired ECG+PPG AF
+dataset and no labelled disturbed-vs-still captures exist in this build.
 
 ---
 

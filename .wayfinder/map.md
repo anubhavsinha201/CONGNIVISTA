@@ -76,6 +76,11 @@ Reached when a stranger can be handed the phone and the unit and walk that loop.
   compile it and no Python mirror to check it against, unlike every other ticket in this
   tracker — the ticket file lists five specific things to verify first. `6ebf74e`.
 
+- [016 — Reconcile the CNN threshold with the retrained model](tickets/016-reconcile-cnn-threshold-drift.md)
+  — the seed-0 model was retrained outside any ticket, silently invalidating the shipped
+  threshold (0.007812 → correctly-fit 0.1875) and the bundled app asset. Caught while
+  checking hardware-test readiness. Rules OR CNN: Sp 0.429 → 0.706 (measured, not assumed).
+
 ## Not yet specified
 
 - Whether ORANGE's 24h / YELLOW's 48h referral windows survive clinician review — landed
