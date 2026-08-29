@@ -35,9 +35,9 @@ Reached when a stranger can be handed the phone and the unit and walk that loop.
 | Built and verified | Signal chain, SQI, PPG + fusion, policy, patient history, INT8-calibrated model (83 KB), encrypted queue, sync engine, sync service (33 tests), read-only dashboard |
 | **Never compiled** | All ~3,900 lines of Dart. No Dart SDK has ever touched it |
 | Absent | `main.dart`, any UI, BLE, `SignalSource`, Tamil strings, replay traces |
-| **Firmware compiles, not yet flashed** | `firmware/main.cpp` against `ble.md`/`ppg.md` now builds clean via `pio run` (RAM 12.2%, Flash 88.5%) — not yet run on real hardware. See ticket 013 |
-| Toolchain | **PlatformIO now installed** (`pip install platformio`, was already present, just not on `PATH`) and confirmed working. Still no Flutter, Dart, adb, or Android SDK |
-| Hardware | ESP32 + AD8232 + MAX30102. Breadboarded, **never produced a clean trace** |
+| **Firmware flashed, boots clean on real hardware** | Real ESP32-D0WD-V3 (MAC `70:4b:ca:56:b1:10`) over COM7. Boot log confirmed live: I2C up, real MAX30102 answered, BLE advertising started, no crash/reset loop. BLE-visibility-to-a-phone and AD8232 electrode signal still untested. See ticket 013 |
+| Toolchain | **PlatformIO installed and proven** (`pio run`, `pio run -t upload` both real successes). Still no Flutter, Dart, adb, or Android SDK |
+| Hardware | ESP32 + AD8232 + MAX30102, real board now connected via USB (CP210x, Windows auto-driver). I2C side (MAX30102) proven; AD8232 electrode trace **still never produced** — that's ticket 003 |
 | **MPU-6050 dropped** | The motion gate loses its sensor. Motion becomes **inferred** from ECG baseline wander and PPG perfusion instability — both measured on the patient, unlike the phone's accelerometer. 19 files reference it as of charting |
 
 ## Decisions so far

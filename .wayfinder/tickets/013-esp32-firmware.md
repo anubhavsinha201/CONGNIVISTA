@@ -1,7 +1,8 @@
 # 013 — ESP32 firmware
 
-`wayfinder:task` · Status: **COMPILES CLEAN, NOT YET FLASHED** · commit `6ebf74e` ·
-still blocked on 003 (real hardware, to actually test)
+`wayfinder:task` · Status: **FLASHED AND RUNNING ON REAL HARDWARE — boot verified** ·
+commit `6ebf74e` · ticket 003's own job (an actual ECG trace through the SQI gate) is
+still separate and not yet done
 
 ## Question
 
@@ -16,7 +17,49 @@ Blocked by: 003 (Prove the AD8232), 001 (Toolchain bring-up — for PlatformIO).
 ~~006 (Inferred motion gate)~~ — closed; the 4-byte status frame in `contracts/ble.md`
 §4 is now settled and ready to implement against.
 
-## Resolution (partial — compiles, not yet run on real hardware)
+## Update — flashed onto real hardware, boot sequence confirmed live
+
+The ESP32 got connected via USB, Windows recognized it as
+`Silicon Labs CP210x USB to UART Bridge (COM7)` (Windows' own automatic driver handling —
+the CP210x driver package downloaded earlier turned out not to be needed), and
+`pio run -t upload --upload-port COM7` succeeded in 41.27s against real silicon:
+
+```
+Chip is ESP32-D0WD-V3 (revision v3.1)
+Features: WiFi, BT, Dual Core, 240MHz, VRef calibration in efuse, Coding Scheme None
+MAC: 70:4b:ca:56:b1:10
+```
+
+Opening `pio device monitor` immediately after (which resets the board as a side effect
+of the port opening) produced the **full boot sequence, live, with no crash and no reset
+loop**:
+
+```
+=== ArogyaX sensor unit booting ===
+ECG pins configured (GPIO34 analog in, GPIO32/33 lead-off)
+[esp32-hal-i2c] Initialising I2C Master: sda=21 scl=22 freq=100000
+MAX30102 found on I2C - PPG available
+BLE device name: ArogyaX-B112
+BLE advertising started - look for it in a BLE scanner app
+Sampling timers armed (idle until a Start command arrives)
+=== Boot complete - waiting for a BLE connection ===
+```
+
+**`MAX30102 found on I2C - PPG available` is the load-bearing line here** — that's not a
+compile-time guess, that's the real chip at SDA=21/SCL=22 answering a real I2C
+transaction. Pin item 1 below is resolved for the I2C pins specifically; the AD8232
+analog/lead-off pins (34/32/33) are wired per the same confirmed map but haven't been
+electrically exercised yet (no electrodes attached during this boot). The device then sat
+idle and healthy for the full monitor window with no reboot — the failure mode a bad
+`esp_timer` setup or a stack overflow would have produced.
+
+**Not yet tested:** whether the BLE advertisement is actually visible/connectable to a
+real central (needs a phone with a BLE scanner, e.g. nRF Connect — the firmware's own
+claim that advertising "started" is unconfirmed from the outside), whether the control
+opcodes work, and whether ECG/PPG frames actually stream correctly once started. Those
+are the next concrete checks, not yet run.
+
+## Resolution (compiles; now also boots clean on real hardware)
 
 **Update:** PlatformIO turned out to already be installed on this machine (just not on
 `PATH`) — installed 001's one real dependency for this ticket without needing the rest of
@@ -76,18 +119,20 @@ one would only compound the risk, not reduce it.
 
 **Resolved by the successful compile (2, 3, 4, 5 below) vs. still open (1):**
 
-1. **Still open.** Pin numbers in the `PIN ASSIGNMENTS` block — updated from a placeholder
-   to the user's actual confirmed wiring map (classic ESP32, GPIO34/32/33/21/22) in a
-   later commit, but "the code references the right GPIO numbers" and "the board is
-   correctly wired to match" are two different claims. Only ticket 003 settles the second.
+1. **Partially resolved.** I2C pins (SDA=21/SCL=22) are now confirmed correct against
+   real silicon — the MAX30102 answered. The AD8232 pins (34/32/33) are wired per the
+   same confirmed map but still electrically unverified — no electrodes were attached
+   for this boot. That's ticket 003's specific job.
 2. ~~SparkFun MAX3010x API~~ — resolved at `@1.1.2`, compiled clean.
 3. ~~`getValue()` return type~~ — `std::string` was correct for the resolved
    `ESP32 BLE Arduino @2.0.0`.
 4. ~~`esp_timer_create_args_t` fields~~ — compiled clean against the resolved esp-idf.
 5. ~~`ADC_11db` naming~~ — resolved, compiled clean.
 
-What's still genuinely unverified: real timing behavior, real BLE connection stability,
-real MAX30102 init against actual silicon, and whether pin 1's numbers match the physical
-board. None of that is provable without ticket 003's hardware.
+What's still genuinely unverified: real timing behavior under load, real BLE connection
+stability with an actual central, whether streaming/control actually works, and the
+AD8232-side pins. None of that is provable without a phone-side BLE test and ticket 003's
+electrode work.
 
-Pushed as `6ebf74e` (source) and this update as a later commit on `main`.
+Pushed as `6ebf74e` (source) and later commits (pin fix, boot prints, this update) on
+`main`.
