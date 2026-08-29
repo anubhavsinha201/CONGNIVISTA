@@ -11,6 +11,15 @@ sensor unit.
 
 Reached when a stranger can be handed the phone and the unit and walk that loop.
 
+**Second leg, added 2026-08-30 — deliberately reopening a prior scope decision.**
+MongoDB's referral/screening records (pseudo-IDs only, no PII by construction) feed a
+Snowflake analytics layer for district-level aggregate reporting — the same thing
+`docs/PRODUCT.md` §9's roadmap already names ("district-level risk analytics"), just
+pulled forward. This is genuinely past the original destination, done for track-prize
+eligibility, not because the round trip needed it. Reached when a district-level view
+(counts by tier, by village, over time) is queryable in Snowflake from real synced data,
+not sample rows.
+
 ## Notes
 
 - **This map carries execution, not only decisions** — an explicit override of
@@ -98,7 +107,11 @@ Reached when a stranger can be handed the phone and the unit and walk that loop.
 
 - **Chatbot** (Advanced Spec §15.3) — conflicts with the no-generated-text rule and needs
   its own safety design.
-- **Actian / Snowflake / n8n** — past the destination; the round trip ends at the dashboard.
+- **Actian / n8n** — still past the destination. ~~Snowflake~~ — reopened 2026-08-30, now
+  the second leg above; see tickets 017–018.
 - **Field-level identity encryption** — real work, not on the route. Until built, don't claim it.
+  Note this is a narrower claim than "the patient database is encrypted": the on-device
+  store is SQLCipher whole-database encryption (built, see `app/lib/data/local_store.dart`)
+  — what's out of scope here is encrypting individual identity *fields* beyond that.
 - **Model retraining pipeline** — needs collected outcomes that don't exist yet.
 - **Six-lead upgrade, SpO2.**
