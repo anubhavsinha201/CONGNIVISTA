@@ -9,7 +9,7 @@ drifts from the contract.
 
 It checks four things:
 
-  1. record.schema.json is itself a valid Draft 2020-12 schema, at v2.
+  1. record.schema.json is itself a valid Draft 2020-12 schema, at v4.
   2. Representative records validate against it — including the awkward ones:
      a gated RETAKE, a PPG-escalated RED, a record with no GPS fix.
   3. The upload payload carries no key outside the schema and no patient
@@ -41,13 +41,16 @@ REPO = Path(__file__).resolve().parents[2]
 SCHEMA_PATH = REPO / "contracts" / "record.schema.json"
 
 # ---- Constants: must match app/lib/data/ --------------------------------
-K_SCHEMA_VERSION = 2
+K_SCHEMA_VERSION = 4
 K_PSEUDO_ID_LENGTH = 16          # PseudoId.kLength
 K_BATCH_SIZE = 25                # SyncEngine.kBatchSize
 K_BACKOFF_SECONDS = [5, 30, 120, 600, 1800, 3600]   # SyncEngine.kBackoff
 
 # Fields the device must never upload (contracts/sync.md section 3).
-SERVER_OWNED = {"referralState", "referralUpdatedAt", "referralUpdatedBy"}
+SERVER_OWNED = {
+    "referralState", "referralUpdatedAt", "referralUpdatedBy",
+    "clinicianOutcome", "clinicianOutcomeAt",
+}
 
 UUID_V4 = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
@@ -112,6 +115,12 @@ def record(
         "lat": 11.0168,
         "lon": 76.9558,
         "locationAccuracyM": 12.5,
+        "ageBand": "55-64",
+        "villageCode": "village-042",
+        "sex": None,
+        "systolicBp": None,
+        "diastolicBp": None,
+        "glucose": None,
         "ppgResult": None,
         "ppgMeanHr": None,
         "ppgIrregularityScore": None,
@@ -140,6 +149,8 @@ def record(
         "referralState": None,
         "referralUpdatedAt": None,
         "referralUpdatedBy": None,
+        "clinicianOutcome": None,
+        "clinicianOutcomeAt": None,
     }
     r.update(overrides)
     return r
@@ -295,17 +306,34 @@ def main() -> int:
     print("\n3. records that must be REJECTED")
     bad = [
         ("an unknown key (the PII guard)", record(patientName="Kavitha")),
-        ("a v1 schemaVersion", record(schemaVersion=1)),
+        ("a stale schemaVersion", record(schemaVersion=2)),
         ("a non-v4 recordId", record(record_id="not-a-uuid")),
         ("a tier outside the enum", record(tier="AFIB")),
         ("a free-text referral note", record(referralNote="pt has AF")),
         ("an sqiScore above 1", record(sqi=1.4)),
         ("a pseudo-ID shorter than 8", record(pseudo_id="abc")),
         ("a referralState outside the enum", record(referralState="cured")),
+        ("an ageBand outside the enum", record(ageBand="18-24")),
+        ("an empty villageCode", record(villageCode="")),
+        ("a systolicBp below plausible range", record(systolicBp=10)),
     ]
     for name, r in bad:
         ok, _ = valid(r)
         check(name, not ok, "validated but should not have")
+
+    # ageBand/villageCode became required in v4. A record missing them
+    # entirely (not merely null - JSON Schema treats "absent" and "null"
+    # differently) must fail, since the whole point of the privacy decision
+    # was that these are always present, just coarse-grained.
+    missing_age = record()
+    del missing_age["ageBand"]
+    ok, _ = valid(missing_age)
+    check("a record missing ageBand entirely", not ok, "validated but should not have")
+
+    missing_village = record()
+    del missing_village["villageCode"]
+    ok, _ = valid(missing_village)
+    check("a record missing villageCode entirely", not ok, "validated but should not have")
 
     # -- 4. the upload payload ------------------------------------------------
     print("\n4. upload payload (contracts/sync.md section 3)")
@@ -322,7 +350,7 @@ def main() -> int:
         f"leaked: {set(payload) & SERVER_OWNED}",
     )
     ok, why = valid(payload)
-    check("is itself a valid v2 record", ok, why)
+    check("is itself a valid v4 record", ok, why)
 
     # The PII check that actually matters: no value in the payload contains the
     # raw identifier the pseudo-ID was derived from.

@@ -68,6 +68,8 @@ ScreeningRecord record(String id, {String tier = 'GREEN', int minute = 0}) =>
       whvId: 'whv-021',
       phcId: 'phc-042',
       capturedAt: DateTime(2026, 8, 29, 9, minute),
+      ageBand: '55-64',
+      villageCode: 'village-042',
       ecgDurationSec: 30,
       sqiScore: 0.8,
       motionRejected: false,

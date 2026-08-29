@@ -89,7 +89,7 @@ enum ClinicianOutcome {
 
 /// One doorstep screening, as stored locally and as uploaded.
 ///
-/// Mirrors contracts/record.schema.json **v2**, field for field. When the schema
+/// Mirrors contracts/record.schema.json **v4**, field for field. When the schema
 /// changes, this class and `ml/reference/validate_record.py` change with it, and
 /// the migration in [LocalStore] gets a new step.
 ///
@@ -97,7 +97,7 @@ enum ClinicianOutcome {
 /// changes after capture is the server-owned referral block, and that arrives by
 /// [copyWith] rather than mutation.
 class ScreeningRecord {
-  static const int kSchemaVersion = 2;
+  static const int kSchemaVersion = 4;
 
   // ---- Identity -----------------------------------------------------------
   final String recordId;
@@ -110,6 +110,18 @@ class ScreeningRecord {
   final double? lat;
   final double? lon;
   final double? locationAccuracyM;
+
+  // ---- Demographics (schema v4) -------------------------------------------
+  // ageBand and villageCode are REQUIRED: a band and a code, not an exact age
+  // or a place name, because clinical fields are stored unencrypted by design
+  // and an exact age + villageCode + sex together would often identify a
+  // specific person in a small village. See contracts/record.schema.json.
+  final String ageBand;
+  final String villageCode;
+  final String? sex;
+  final double? systolicBp;
+  final double? diastolicBp;
+  final double? glucose;
 
   // ---- Camera / contact PPG ----------------------------------------------
   final String? ppgResult;
@@ -169,6 +181,12 @@ class ScreeningRecord {
     this.lat,
     this.lon,
     this.locationAccuracyM,
+    required this.ageBand,
+    required this.villageCode,
+    this.sex,
+    this.systolicBp,
+    this.diastolicBp,
+    this.glucose,
     this.ppgResult,
     this.ppgMeanHr,
     this.ppgIrregularityScore,
@@ -219,6 +237,12 @@ class ScreeningRecord {
     double? lat,
     double? lon,
     double? locationAccuracyM,
+    required String ageBand,
+    required String villageCode,
+    String? sex,
+    double? systolicBp,
+    double? diastolicBp,
+    double? glucose,
     String? ecgWaveformRef,
     DateTime? now,
     String? newId,
@@ -240,6 +264,13 @@ class ScreeningRecord {
       lat: lat,
       lon: lon,
       locationAccuracyM: locationAccuracyM,
+
+      ageBand: ageBand,
+      villageCode: villageCode,
+      sex: sex,
+      systolicBp: systolicBp,
+      diastolicBp: diastolicBp,
+      glucose: glucose,
 
       ppgResult: ppg?.prescreenOutcome,
       ppgMeanHr: ppg == null || !ppg.usable ? null : ppg.meanPulseRate,
@@ -295,6 +326,12 @@ class ScreeningRecord {
         lat: lat,
         lon: lon,
         locationAccuracyM: locationAccuracyM,
+        ageBand: ageBand,
+        villageCode: villageCode,
+        sex: sex,
+        systolicBp: systolicBp,
+        diastolicBp: diastolicBp,
+        glucose: glucose,
         ppgResult: ppgResult,
         ppgMeanHr: ppgMeanHr,
         ppgIrregularityScore: ppgIrregularityScore,
@@ -339,6 +376,12 @@ class ScreeningRecord {
         'lat': lat,
         'lon': lon,
         'locationAccuracyM': locationAccuracyM,
+        'ageBand': ageBand,
+        'villageCode': villageCode,
+        'sex': sex,
+        'systolicBp': systolicBp,
+        'diastolicBp': diastolicBp,
+        'glucose': glucose,
         'ppgResult': ppgResult,
         'ppgMeanHr': ppgMeanHr,
         'ppgIrregularityScore': ppgIrregularityScore,
@@ -397,6 +440,12 @@ class ScreeningRecord {
         lat: _d(j['lat']),
         lon: _d(j['lon']),
         locationAccuracyM: _d(j['locationAccuracyM']),
+        ageBand: j['ageBand'] as String,
+        villageCode: j['villageCode'] as String,
+        sex: j['sex'] as String?,
+        systolicBp: _d(j['systolicBp']),
+        diastolicBp: _d(j['diastolicBp']),
+        glucose: _d(j['glucose']),
         ppgResult: j['ppgResult'] as String?,
         ppgMeanHr: _d(j['ppgMeanHr']),
         ppgIrregularityScore: _d(j['ppgIrregularityScore']),
@@ -430,11 +479,6 @@ class ScreeningRecord {
         referralUpdatedBy: j['referralUpdatedBy'] as String?,
         clinicianOutcome:
             ClinicianOutcome.fromWire(j['clinicianOutcome'] as String?),
-        clinicianOutcomeAt: j['clinicianOutcomeAt'] == null
-            ? null
-            : DateTime.parse(j['clinicianOutcomeAt'] as String).toUtc(),
-        clinicianOutcome:
-            ClinicianOutcome.fromWire(j['clinicianOutcome'] as String?),
         clinicianOutcomeAt: _dt(j['clinicianOutcomeAt']),
       );
 
@@ -453,6 +497,10 @@ class ScreeningRecord {
       errors.add('patientPseudoId shorter than 8 characters');
     }
     if (whvId.isEmpty) errors.add('whvId is empty');
+    if (!const {'45-54', '55-64', '65-74', '75+'}.contains(ageBand)) {
+      errors.add('ageBand not in the enum: $ageBand');
+    }
+    if (villageCode.isEmpty) errors.add('villageCode is empty');
     if (!const {'RED', 'AMBER', 'GREEN', 'RETAKE'}.contains(tier)) {
       errors.add('tier not in the enum: $tier');
     }

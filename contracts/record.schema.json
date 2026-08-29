@@ -2,7 +2,7 @@
  "$schema": "https://json-schema.org/draft/2020-12/schema",
  "$id": "https://arogyax.local/contracts/record.schema.json",
  "title": "ArogyaX screening record",
- "description": "One doorstep screening. Shared verbatim by the app's local sqlite store, the sync payload, and the PHC dashboard. Locked at H0 as v1; amended to v2 to give the PPG/fusion layer and the PHC referral acknowledgement a home. See contracts/sync.md for the wire protocol.",
+ "description": "One doorstep screening. Shared verbatim by the app's local sqlite store, the sync payload, and the PHC dashboard. Locked at H0 as v1; v2 gave the PPG/fusion layer and the PHC referral acknowledgement a home; v3 added the clinician outcome (the finding, distinct from referralState which is process); v4 adds age band and geography for the longitudinal risk engine. See contracts/sync.md for the wire protocol.",
  "type": "object",
  "required": [
   "recordId",
@@ -10,6 +10,8 @@
   "patientPseudoId",
   "whvId",
   "capturedAt",
+  "ageBand",
+  "villageCode",
   "tier",
   "modelVersion",
   "syncState"
@@ -23,8 +25,8 @@
   },
   "schemaVersion": {
    "type": "integer",
-   "const": 2,
-   "description": "v1 -> v2 added the PPG/fusion evidence fields and the referral acknowledgement block. Every added field is nullable, so a v1 record is a valid v2 record once this integer is bumped."
+   "const": 4,
+   "description": "v1 -> v2 added the PPG/fusion evidence fields and the referral acknowledgement block. v2 -> v3 added clinicianOutcome (this field was previously in the sqlite migration but not reflected here - drift fixed alongside the v4 bump). v3 -> v4 added ageBand and villageCode (required) plus sex/systolicBp/diastolicBp/glucose (optional). Every added field is nullable or has a migration default, so an older record is a valid newer record once this integer is bumped."
   },
   "patientPseudoId": {
    "type": "string",
@@ -43,6 +45,60 @@
    "type": "string",
    "format": "date-time",
    "description": "ISO 8601 with timezone offset"
+  },
+  "ageBand": {
+   "type": "string",
+   "enum": [
+    "45-54",
+    "55-64",
+    "65-74",
+    "75+"
+   ],
+   "description": "REQUIRED. A band, not a date of birth or exact age. MTM screens 45+ (docs/PRODUCT.md section 2), and the risk engine needs age as a broad input, not as a precise one - an exact age plus villageCode plus sex would often uniquely identify a person in a small village, and clinical fields are stored unencrypted by design (docs/PRODUCT.md section 11). Choosing a band is the privacy decision, not an implementation shortcut."
+  },
+  "villageCode": {
+   "type": "string",
+   "description": "REQUIRED. An opaque village/locality code assigned by the district health authority - not a free-text place name, and not the same thing as lat/lon (which is the screening's own GPS fix, may be absent, and identifies a point rather than a place). This is what the district risk map groups by; it must not be joinable back to a name without the district's own gazetteer.",
+   "minLength": 1
+  },
+  "sex": {
+   "type": [
+    "string",
+    "null"
+   ],
+   "enum": [
+    "female",
+    "male",
+    "other",
+    null
+   ],
+   "description": "Optional. Filled when the MTM workflow has already collected it; never asked as a new question for this screening alone."
+  },
+  "systolicBp": {
+   "type": [
+    "number",
+    "null"
+   ],
+   "minimum": 50,
+   "maximum": 300,
+   "description": "Optional, mmHg. From the same MTM visit's existing BP check (docs/PRODUCT.md section 2), not a new measurement this product takes."
+  },
+  "diastolicBp": {
+   "type": [
+    "number",
+    "null"
+   ],
+   "minimum": 30,
+   "maximum": 200,
+   "description": "Optional, mmHg. See systolicBp."
+  },
+  "glucose": {
+   "type": [
+    "number",
+    "null"
+   ],
+   "minimum": 0,
+   "description": "Optional, mg/dL, random or fasting unspecified. From the same MTM visit's existing glucose check, where available (docs/PRODUCT.md section 2)."
   },
   "lat": {
    "type": [

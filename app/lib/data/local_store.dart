@@ -25,7 +25,7 @@ import 'record.dart';
 /// without a ripple through the app.
 class LocalStore {
   /// Bumped with contracts/record.schema.json. See [_migrate].
-  static const int kSchemaVersion = 3;
+  static const int kSchemaVersion = 4;
 
   final CommonDatabase _db;
   final _pending = StreamController<int>.broadcast();
@@ -118,6 +118,25 @@ class LocalStore {
           'ON records (patientPseudoId, capturedAt DESC);');
       _db.execute('PRAGMA user_version = 3;');
     }
+
+    if (_currentVersion < 4) {
+      // v3 -> v4. Demographics for the longitudinal risk engine. ageBand and
+      // villageCode are required going forward (ScreeningRecord.validate()
+      // enforces this for new rows), but existing rows predate the question
+      // being asked at all, so the column itself must stay nullable — there is
+      // no honest band or code to backfill an old row with.
+      for (final col in const [
+        'ageBand TEXT',
+        'villageCode TEXT',
+        'sex TEXT',
+        'systolicBp REAL',
+        'diastolicBp REAL',
+        'glucose REAL',
+      ]) {
+        _db.execute('ALTER TABLE records ADD COLUMN $col;');
+      }
+      _db.execute('PRAGMA user_version = 4;');
+    }
   }
 
   int get _currentVersion =>
@@ -140,6 +159,7 @@ class LocalStore {
       INSERT OR REPLACE INTO records (
         recordId, patientPseudoId, whvId, phcId, capturedAt,
         lat, lon, locationAccuracyM,
+        ageBand, villageCode, sex, systolicBp, diastolicBp, glucose,
         ppgResult, ppgMeanHr, ppgIrregularityScore, ppgPerfusionIndex,
         ecgDurationSec, sqiScore, motionRejected, leadOffDetected,
         meanHr, rrIntervalCount, rrIrregularityScore, cnnScore, decidedBy,
@@ -149,12 +169,14 @@ class LocalStore {
         syncState, syncedAt, attemptCount, nextRetryAt, lastErrorCode,
         referralState, referralUpdatedAt, referralUpdatedBy,
         clinicianOutcome, clinicianOutcomeAt
-      ) VALUES (${List.filled(41, '?').join(',')});
+      ) VALUES (${List.filled(47, '?').join(',')});
       ''',
       [
         j['recordId'], j['patientPseudoId'], j['whvId'], j['phcId'],
         j['capturedAt'],
         j['lat'], j['lon'], j['locationAccuracyM'],
+        j['ageBand'], j['villageCode'], j['sex'],
+        j['systolicBp'], j['diastolicBp'], j['glucose'],
         j['ppgResult'], j['ppgMeanHr'], j['ppgIrregularityScore'],
         j['ppgPerfusionIndex'],
         j['ecgDurationSec'], j['sqiScore'],
@@ -389,6 +411,12 @@ class LocalStore {
         'lat': r['lat'],
         'lon': r['lon'],
         'locationAccuracyM': r['locationAccuracyM'],
+        'ageBand': r['ageBand'],
+        'villageCode': r['villageCode'],
+        'sex': r['sex'],
+        'systolicBp': r['systolicBp'],
+        'diastolicBp': r['diastolicBp'],
+        'glucose': r['glucose'],
         'ppgResult': r['ppgResult'],
         'ppgMeanHr': r['ppgMeanHr'],
         'ppgIrregularityScore': r['ppgIrregularityScore'],

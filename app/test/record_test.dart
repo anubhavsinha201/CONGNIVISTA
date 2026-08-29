@@ -11,7 +11,7 @@ import 'package:arogyax/signal/fusion.dart';
 import 'package:arogyax/signal/rr_features.dart';
 import 'package:arogyax/signal/sqi.dart';
 
-/// Checks ScreeningRecord against contracts/record.schema.json v2.
+/// Checks ScreeningRecord against contracts/record.schema.json v4.
 ///
 /// The Python mirror (ml/reference/validate_record.py) validates against the
 /// schema document itself with a real JSON Schema library. This side checks the
@@ -79,6 +79,8 @@ ScreeningRecord build({
       fusion: fusion,
       lat: lat,
       lon: lon,
+      ageBand: '55-64',
+      villageCode: 'village-042',
     );
 
 void main() {
@@ -93,7 +95,7 @@ void main() {
     test('the record serialises exactly the schema version it claims', () {
       expect(ScreeningRecord.kSchemaVersion,
           schema['properties']['schemaVersion']['const']);
-      expect(build().toJson()['schemaVersion'], 2);
+      expect(build().toJson()['schemaVersion'], ScreeningRecord.kSchemaVersion);
     });
 
     test('every serialised key exists in the schema', () {
@@ -317,6 +319,8 @@ void main() {
         patientPseudoId: 'a1b2c3d4e5f60718',
         whvId: 'whv-021',
         capturedAt: DateTime.now(),
+        ageBand: '55-64',
+        villageCode: 'village-042',
         ecgDurationSec: 30,
         sqiScore: 0.8,
         motionRejected: false,
@@ -334,6 +338,8 @@ void main() {
         patientPseudoId: 'a1b2c3d4e5f60718',
         whvId: 'whv-021',
         capturedAt: DateTime.now(),
+        ageBand: '55-64',
+        villageCode: 'village-042',
         ecgDurationSec: 30,
         sqiScore: 0.2,
         motionRejected: false,

@@ -17,7 +17,9 @@ function uuid() {
 function record(overrides = {}) {
   return {
     recordId: uuid(),
-    schemaVersion: 2,
+    schemaVersion: 4,
+    ageBand: '55-64',
+    villageCode: 'village-042',
     patientPseudoId: 'a1b2c3d4e5f60718',
     whvId: 'whv-021',
     phcId: 'phc-042',

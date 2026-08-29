@@ -12,7 +12,9 @@ let repo;
 function record(overrides = {}) {
   return {
     recordId: '3f2504e0-4f89-41d3-9a0c-0305e82c3301',
-    schemaVersion: 2,
+    schemaVersion: 4,
+    ageBand: '55-64',
+    villageCode: 'village-042',
     patientPseudoId: 'a1b2c3d4e5f60718',
     whvId: 'whv-021',
     phcId: 'phc-042',
