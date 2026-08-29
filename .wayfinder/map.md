@@ -21,8 +21,8 @@ Reached when a stranger can be handed the phone and the unit and walk that loop.
 - **Contracts are the source of truth** — `contracts/ble.md`, `ppg.md`, `model.md`,
   `tiers.md`, `sync.md`, `record.schema.json`. Change the contract before the code.
 - **Every Dart change must keep the Python mirrors green.** Five validators:
-  `validate_dsp` (30), `validate_policy` (24), `validate_ppg` (21), `validate_history`
-  (26), `validate_record`. Server: 33 tests.
+  `validate_dsp` (30), `validate_policy` (31), `validate_ppg` (28), `validate_history`
+  (29), `validate_record`. Server: 40 tests.
 - **Git discipline for this map:** commit and push to `origin/main` after each ticket
   resolves and its validators are green — the human asked for a rollback point per phase.
 - Skills: `/prototype` for UI tickets, `/grilling` + `/domain-modeling` when a ticket
@@ -58,11 +58,21 @@ Reached when a stranger can be handed the phone and the unit and walk that loop.
   dataset (CinC 2017: Sp 0.497→0.848). Surfaced that the deployed OR-combination is
   bottlenecked by the CNN's own Sp, not the rules detector — flagged for ticket 007.
   `18ac3fa`.
+- [007 — Five-state triage](tickets/007-five-state-triage.md) — GREEN/YELLOW/ORANGE/RED
+  + RETAKE now implemented, `PatientHistory.isIntermittent`/`isPersistent` wired into
+  `Policy.decide`. ORANGE = irregularity flagged and the pattern has been seen across
+  visits; also reachable on a visit that is itself clean, when `isIntermittent` — the
+  paroxysmal case a single clean strip is expected to miss. `isPersistent` alone does
+  not get that bypass (a clean visit after an all-flagged history is read as a real
+  result). The CNN's own Sp 0.460 bottleneck flagged by ticket 005 was deliberately
+  **not** touched here — a separate, already-documented problem, not folded into this
+  ticket. `31b1db8`.
 
 ## Not yet specified
 
-- How YELLOW and ORANGE thresholds get set from history — needs Five-state triage landed
-  and the threshold refit measured.
+- Whether ORANGE's 24h / YELLOW's 48h referral windows survive clinician review — landed
+  in ticket 007 as PROVISIONAL, reasoned but not fitted, same status as the rest of
+  `contracts/tiers.md` §3's DRAFT strings. Ticket 011 is where that review happens.
 - How sensitive the inferred motion gate should be — needs real disturbed captures from
   the hardware bring-up ticket before a threshold can be chosen honestly.
 - Whether the dashboard needs a per-patient timeline view — depends what the clinician
