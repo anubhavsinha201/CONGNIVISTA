@@ -45,6 +45,10 @@ Reached when a stranger can be handed the phone and the unit and walk that loop.
   `ageBand`/`villageCode` required, `sex`/BP/`glucose` optional; also fixed a stale
   v2→v3 schema-version drift and a duplicate-argument compile bug found along the way.
   `8f4f857`.
+- [004 — Wire the clinician outcome loop](tickets/004-clinician-outcome-loop.md) —
+  `POST /v1/acks` now accepts `clinicianOutcome` alongside `referralState`, without
+  either ever clobbering the other; dashboard gained an independent outcome control.
+  `20bd8c1`.
 
 ## Not yet specified
 
