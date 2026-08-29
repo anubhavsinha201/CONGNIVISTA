@@ -52,9 +52,14 @@ object Backoff {
 
 enum class QueueSyncState { PENDING, SYNCED, FAILED }
 
-/** One record's position in the queue - the in-memory mirror of `FakeQueue.QueuedRecord`. */
+/**
+ * One record's position in the queue - the in-memory mirror of
+ * `FakeQueue.QueuedRecord`, extended to carry the actual [record] payload
+ * (not just its ID) now that [SyncEngine] needs something real to upload.
+ */
 data class QueuedRecord(
     val recordId: String,
+    val record: ScreeningRecord,
     var syncState: QueueSyncState = QueueSyncState.PENDING,
     var attemptCount: Int = 0,
     var nextRetryAt: OffsetDateTime? = null,
@@ -70,8 +75,8 @@ data class QueuedRecord(
 class SyncQueue {
     private val rows = mutableMapOf<String, QueuedRecord>()
 
-    fun insert(recordId: String) {
-        rows[recordId] = QueuedRecord(recordId)
+    fun insert(record: ScreeningRecord) {
+        rows[record.recordId] = QueuedRecord(record.recordId, record)
     }
 
     fun row(recordId: String): QueuedRecord? = rows[recordId]

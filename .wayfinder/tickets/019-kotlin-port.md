@@ -1,9 +1,10 @@
 # 019 — Port the app from Flutter/Dart to native Android (Kotlin)
 
-`wayfinder:task` · Status: **modules 1, 2, 5, 8 fully ported and verified. Module 3
-(Policy) paused by user request — its TYPES ported (not `decide()`) to unblock module 4.
-Module 7 narrowed to its pure state machine (not the real store/network). Module 6 not
-started. 56/56 tests passing across 8 classes.**
+`wayfinder:task` · Status: **modules 1, 2, 5, 8 fully ported and verified. Module 7's real
+orchestration + real network client now built and proven against a live server. Module 3
+(Policy) still paused by user request — its TYPES ported (not `decide()`) to unblock
+module 4. Module 6 (encrypted store) still not started. 71 tests, 70 passing + 1 correctly
+`@Ignore`d live-server test, across 13 classes.**
 
 ## Question
 
@@ -254,3 +255,59 @@ Tickets 009/010/012/014 still describe the right *behavior* (SignalSource abstra
 capture flow, model loading, BLE parsing) — they just need their file-path/language
 specifics re-read as Kotlin equivalents when each is actually taken up, not rewritten
 preemptively before the port strategy for each is decided.
+
+## Module 7 completed for real: SyncClient + SyncEngine orchestration (2026-08-30)
+
+User asked to finish what module 7 had deliberately left narrow, plus the audio
+playback wiring `ExplanationAudio`/`TierAudioClips` had deliberately left undone.
+
+**`SyncClient.kt` — real HTTP, against the live server, not the contract doc alone.**
+`HttpSyncClient` implements `contracts/sync.md`'s wire protocol with `HttpURLConnection`,
+not a newer client — deliberately: `java.net.http.HttpClient` (Java 11+) isn't available
+on Android below API 34, and this product's target is a budget Android phone
+(`docs/PRODUCT.md`), not a new-enough one to assume that. `HttpURLConnection` has existed
+since API 1. Zero new dependency either way; this is the more-compatible choice for the
+actual deployment target, not just the smaller one.
+
+**`SyncEngine.kt` — the real orchestration**, sitting on top of `SyncQueue` (module 7's
+existing pure state machine, extended to hold the actual `ScreeningRecord` payload, not
+just an ID, now that there's something real to upload) and the new `SyncClient`. Full
+`flush()`/`flushNow()`/backoff/ack-pulling logic ported from `sync.dart`'s `SyncEngine`.
+
+**Verified against the live Atlas-backed server, not mocked:** restarted `server/` fresh
+against the real cluster (killed an ambiguous already-running instance first, to remove
+any doubt about which backend it was using), then ran a real `SyncEngine.flush()` from
+Kotlin against it. Result, independently re-checked via a direct `GET /v1/queue` call
+before the code even reported success: the exact record inserted into `SyncQueue`
+appeared server-side, `report.accepted == 1`, `QueuedRecord.syncState == SYNCED`. Test
+record deleted from Atlas afterward, same hygiene as tickets 017/018.
+
+This one test (`SyncEngineIntegrationTest`) is `@Ignore`d in the committed source — every
+other suite in this project runs hermetically (no device, no network), and this is the
+first one that genuinely needs a live server, so by default it would break that property
+for anyone else running `gradle test`. Run it deliberately (remove the annotation, or an
+IDE "run single test") when a live server is available to check against — the same
+on-demand relationship `ml/reference/export_replay_trace.py`-style scripts already have
+with the rest of the test suite.
+
+## Audio playback wiring completed, with an honest verification limit named (2026-08-30)
+
+`ExplanationAudio`/`TierAudioClips` (ticket 015) compute *what* to play; nothing called
+an actual player. Split the same way everything Android-framework-touching has been
+split all along:
+
+- **`SequencePlayer` + `ClipPlayer`** (`TamilAudioPlayer.kt`) — the real logic (play
+  clips in order, skip a clip that errors rather than aborting the sentence, cancel
+  mid-sequence) behind a small interface, so it's testable with a fake player and no
+  `android.media.MediaPlayer` at all. 5 new tests, 0 device dependency.
+- **`MediaPlayerClipPlayer`** — the actual `android.media.MediaPlayer` adapter.
+  **Deliberately not unit-tested, and not fakeable into being tested**: Android's real
+  `MediaPlayer` is a compile-only stub outside a device/emulator, and a Robolectric shadow
+  would only be simulating the exact behavior this class exists to get right — proving
+  the shadow works, not that the real thing does. Correct by inspection against the
+  documented `MediaPlayer` API; genuine verification needs ticket 010's UI and a real
+  device or emulator, the same honest limit ticket 013's firmware had before it got
+  flashed.
+
+`gradle testDebugUnitTest`: **71 tests, 70 passing, 1 correctly `@Ignore`d, across 13
+classes.**

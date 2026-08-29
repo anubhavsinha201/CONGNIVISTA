@@ -14,17 +14,34 @@ import kotlin.random.Random
 class SyncQueueTest {
     private val now: OffsetDateTime = OffsetDateTime.now()
 
+    /** Minimal valid record with the given ID - content doesn't matter for queue-state tests. */
+    private fun fakeRecord(id: String) = ScreeningRecord(
+        recordId = id,
+        patientPseudoId = "a1b2c3d4e5f60718",
+        whvId = "whv-021",
+        capturedAt = OffsetDateTime.now(),
+        ageBand = "55-64",
+        villageCode = "village-042",
+        ecgDurationSec = 30.0,
+        sqiScore = 0.9,
+        motionRejected = false,
+        leadOffDetected = false,
+        decidedBy = "rules",
+        tier = "GREEN",
+        modelVersion = "rules-1.0",
+    )
+
     @Test
     fun `five captures queue as pending`() {
         val q = SyncQueue()
-        repeat(5) { q.insert("rec-$it") }
+        repeat(5) { q.insert(fakeRecord("rec-$it")) }
         assertEquals(5, q.pendingCount())
     }
 
     @Test
     fun `a flush cut short syncs only what was acked, the rest stay pending not lost`() {
         val q = SyncQueue()
-        repeat(5) { q.insert("rec-$it") }
+        repeat(5) { q.insert(fakeRecord("rec-$it")) }
         q.markSynced("rec-0", now)
         q.markSynced("rec-1", now)
         assertEquals(3, q.pendingCount())
@@ -37,7 +54,7 @@ class SyncQueueTest {
     @Test
     fun `the next batch excludes already-synced records`() {
         val q = SyncQueue()
-        repeat(5) { q.insert("rec-$it") }
+        repeat(5) { q.insert(fakeRecord("rec-$it")) }
         q.markSynced("rec-0", now)
         q.markSynced("rec-1", now)
         val batch = q.nextBatch(now).map { it.recordId }.toSet()
@@ -47,7 +64,7 @@ class SyncQueueTest {
     @Test
     fun `an unmentioned record stays pending and is not due until its backoff clears`() {
         val q = SyncQueue()
-        q.insert("rec-2")
+        q.insert(fakeRecord("rec-2"))
         q.markRetryable("rec-2", Backoff.nextRetryAt(now, 0, Random(0)))
         assertEquals(QueueSyncState.PENDING, q.row("rec-2")!!.syncState)
         assertTrue("rec-2" !in q.nextBatch(now).map { it.recordId })
@@ -57,7 +74,7 @@ class SyncQueueTest {
     @Test
     fun `a rejected record leaves the queue and never reappears`() {
         val q = SyncQueue()
-        q.insert("rec-3")
+        q.insert(fakeRecord("rec-3"))
         q.markFailed("rec-3")
         assertEquals(QueueSyncState.FAILED, q.row("rec-3")!!.syncState)
         assertTrue("rec-3" !in q.nextBatch(now.plusDays(1)).map { it.recordId })
@@ -92,7 +109,7 @@ class SyncQueueTest {
     @Test
     fun `clearBackoff releases every pending record at once without resetting the ladder position`() {
         val q = SyncQueue()
-        listOf("rec-2", "rec-4").forEach { q.insert(it) }
+        listOf("rec-2", "rec-4").forEach { q.insert(fakeRecord(it)) }
         q.markRetryable("rec-2", now.plusHours(1))
         val due = q.nextBatch(now).map { it.recordId }.toSet()
         assertTrue("rec-2" !in due)
@@ -110,8 +127,8 @@ class SyncQueueTest {
     @Test
     fun `an ack lands on a synced record but never on one the server never accepted`() {
         val q = SyncQueue()
-        q.insert("rec-0")
-        q.insert("rec-2")
+        q.insert(fakeRecord("rec-0"))
+        q.insert(fakeRecord("rec-2"))
         q.markSynced("rec-0", now)
         // rec-2 stays pending (never synced).
 
