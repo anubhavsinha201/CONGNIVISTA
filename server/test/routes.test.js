@@ -130,6 +130,15 @@ describe('round trip', () => {
     });
     assert.equal(ack.status, 200);
 
+    // A clinician later records what they actually found — a separate call,
+    // the way the dashboard's second dropdown makes it.
+    const outcome = await post('/v1/acks', {
+      recordId: r.recordId,
+      referralState: 'seen_at_phc',
+      clinicianOutcome: 'confirmed',
+    });
+    assert.equal(outcome.status, 200);
+
     // It reaches the worker's phone on the next pull.
     const pulled = await (
       await fetch(`${base}/v1/acks`, {
@@ -139,6 +148,7 @@ describe('round trip', () => {
 
     assert.equal(pulled.acks.length, 1);
     assert.equal(pulled.acks[0].referralState, 'seen_at_phc');
+    assert.equal(pulled.acks[0].clinicianOutcome, 'confirmed');
     assert.ok(pulled.cursor);
   });
 
@@ -148,6 +158,31 @@ describe('round trip', () => {
       referralState: 'has_atrial_fibrillation',
     });
     assert.equal(res.status, 400);
+  });
+
+  test('a follow-up-only ack over HTTP does not touch a recorded outcome', async () => {
+    // The one thing that can only be proven at the HTTP layer: JSON.stringify
+    // on a plain JS object that never set `clinicianOutcome` produces a body
+    // with no such key at all, and routes.js's `'clinicianOutcome' in body`
+    // must read that absence correctly off the wire, not just in-process.
+    const r = record({ recordId: '3f2504e0-4f89-41d3-9a0c-0305e82c3888', tier: 'RED' });
+    await post('/v1/records:batch', { records: [r] }, 'tok-021');
+
+    await post('/v1/acks', {
+      recordId: r.recordId,
+      referralState: 'seen_at_phc',
+      clinicianOutcome: 'confirmed',
+    });
+
+    // No clinicianOutcome key in this body at all - the plain follow-up dropdown.
+    await post('/v1/acks', { recordId: r.recordId, referralState: 'closed' });
+
+    const pulled = await (
+      await fetch(`${base}/v1/acks`, { headers: { Authorization: 'Bearer tok-021' } })
+    ).json();
+    const row = pulled.acks.find((a) => a.recordId === r.recordId);
+    assert.equal(row.referralState, 'closed');
+    assert.equal(row.clinicianOutcome, 'confirmed', 'outcome must survive an HTTP round trip');
   });
 
   test('healthz answers without a token', async () => {

@@ -125,7 +125,7 @@
     <div class="scroll"><table>
       <thead><tr>
         <th>Urgency</th><th>Patient ref</th><th>Screened</th>
-        <th>Worker</th><th>Evidence</th><th>Follow-up</th>
+        <th>Worker</th><th>Evidence</th><th>Follow-up</th><th>Outcome</th>
       </tr></thead>
       <tbody id="rows"></tbody>
     </table></div>
@@ -158,6 +158,18 @@ const FOLLOW_UP = {
   visit_scheduled: 'Visit scheduled',
   seen_at_phc: 'Seen at PHC',
   closed: 'Closed',
+};
+
+// Mirrors the clinicianOutcome enum in contracts/record.schema.json. Distinct
+// from FOLLOW_UP above: that tracks process (was the patient contacted), this
+// records the finding (was the rhythm this referral was raised for actually
+// there) — the training label a feedback loop needs, which process alone
+// cannot provide. The blank option is a display state, never submitted.
+const CLINICIAN_OUTCOME = {
+  '': 'Not yet reviewed',
+  confirmed: 'Confirmed',
+  not_confirmed: 'Not confirmed',
+  inconclusive: 'Inconclusive',
 };
 
 const TIERS = ['RED', 'AMBER', 'GREEN', 'RETAKE'];
@@ -240,6 +252,25 @@ function renderRows(records) {
     sel.addEventListener('change', () => ack(r.recordId, sel.value, sel));
     cell.appendChild(sel);
 
+    // Clinical finding control. Independent of the follow-up select above —
+    // resubmits the row's CURRENT referralState unchanged alongside the new
+    // outcome, since /v1/acks still requires one on every call, but this
+    // control's whole purpose is to change the outcome, not the process state.
+    const outcomeCell = td('');
+    const outSel = document.createElement('select');
+    for (const [value, label] of Object.entries(CLINICIAN_OUTCOME)) {
+      const o = document.createElement('option');
+      o.value = value;
+      o.textContent = label;
+      if ((r.clinicianOutcome ?? '') === value) o.selected = true;
+      outSel.appendChild(o);
+    }
+    outSel.addEventListener('change', () => {
+      if (!outSel.value) return; // "Not yet reviewed" is not an action
+      ackOutcome(r.recordId, r.referralState ?? 'none', outSel.value, outSel);
+    });
+    outcomeCell.appendChild(outSel);
+
     tbody.appendChild(tr);
   }
 }
@@ -319,6 +350,25 @@ async function ack(recordId, referralState, control) {
     $('status').textContent = `follow-up saved ${new Date().toLocaleTimeString()}`;
   } catch (e) {
     showError(`Could not save follow-up: ${e.message}`);
+  } finally {
+    control.disabled = false;
+  }
+}
+
+async function ackOutcome(recordId, referralState, clinicianOutcome, control) {
+  control.disabled = true;
+  try {
+    const res = await fetch(`${API}/v1/acks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        recordId, referralState, clinicianOutcome, referralUpdatedBy: 'phc-desk',
+      }),
+    });
+    if (!res.ok) throw new Error(`outcome rejected (${res.status})`);
+    $('status').textContent = `outcome saved ${new Date().toLocaleTimeString()}`;
+  } catch (e) {
+    showError(`Could not save outcome: ${e.message}`);
   } finally {
     control.disabled = false;
   }

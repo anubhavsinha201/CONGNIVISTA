@@ -60,10 +60,13 @@ export class MongoRepo {
   }
 
   async findAcks({ whvId, since }) {
-    const q = { whvId, referralState: { $ne: null } };
+    const q = {
+      whvId,
+      $or: [{ referralState: { $ne: null } }, { clinicianOutcome: { $ne: null } }],
+    };
     if (since) q.referralUpdatedAt = { $gt: since };
 
-    return this.records
+    const rows = await this.records
       .find(q, {
         projection: {
           _id: 0,
@@ -71,18 +74,29 @@ export class MongoRepo {
           referralState: 1,
           referralUpdatedAt: 1,
           referralUpdatedBy: 1,
+          clinicianOutcome: 1,
+          clinicianOutcomeAt: 1,
         },
       })
       .sort({ referralUpdatedAt: 1 })
       .limit(500)
       .toArray();
+
+    // Fields absent from an older document come back as `undefined` from the
+    // driver, not `null` - normalise so the wire shape is stable either way.
+    return rows.map((r) => ({
+      ...r,
+      clinicianOutcome: r.clinicianOutcome ?? null,
+      clinicianOutcomeAt: r.clinicianOutcomeAt ?? null,
+    }));
   }
 
-  async setReferralState({ recordId, referralState, referralUpdatedBy, referralUpdatedAt }) {
-    const res = await this.records.updateOne(
-      { recordId },
-      { $set: { referralState, referralUpdatedBy, referralUpdatedAt } },
-    );
+  // Takes the pre-built patch from SyncService and $sets exactly those keys.
+  // Mongo's $set is inherently partial, so a referral-state-only call (no
+  // clinicianOutcome key present) leaves an existing outcome untouched - see
+  // the doc comment on SyncService.setReferralState.
+  async setReferralState({ recordId, ...fields }) {
+    const res = await this.records.updateOne({ recordId }, { $set: fields });
     return res.matchedCount > 0;
   }
 

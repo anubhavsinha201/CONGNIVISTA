@@ -47,22 +47,31 @@ export class MemoryRepo {
       .filter(
         (r) =>
           r.whvId === whvId &&
-          r.referralState != null &&
+          (r.referralState != null || r.clinicianOutcome != null) &&
           (!since || (r.referralUpdatedAt ?? '') > since),
       )
       .sort((a, b) => (a.referralUpdatedAt ?? '').localeCompare(b.referralUpdatedAt ?? ''))
-      .map(({ recordId, referralState, referralUpdatedAt, referralUpdatedBy }) => ({
+      .map(({
+        recordId, referralState, referralUpdatedAt, referralUpdatedBy,
+        clinicianOutcome, clinicianOutcomeAt,
+      }) => ({
         recordId,
         referralState,
         referralUpdatedAt,
         referralUpdatedBy,
+        clinicianOutcome: clinicianOutcome ?? null,
+        clinicianOutcomeAt: clinicianOutcomeAt ?? null,
       }));
   }
 
-  async setReferralState({ recordId, referralState, referralUpdatedBy, referralUpdatedAt }) {
+  // Takes the pre-built patch from SyncService rather than named referral
+  // fields: `Object.assign` only touches the keys actually present, so a
+  // referral-state-only call (no clinicianOutcome key at all) cannot clobber
+  // an outcome a clinician already set. See the doc comment on the caller.
+  async setReferralState({ recordId, ...patch }) {
     const r = this.records.get(recordId);
     if (!r) return false;
-    Object.assign(r, { referralState, referralUpdatedBy, referralUpdatedAt });
+    Object.assign(r, patch);
     return true;
   }
 

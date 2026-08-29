@@ -100,11 +100,20 @@ export function buildApp({ repo, service, dashboardOrigin = '*' }) {
   });
 
   app.post('/v1/acks', async (req, res) => {
-    const result = await service.setReferralState({
-      recordId: req.body?.recordId,
-      referralState: req.body?.referralState,
-      referralUpdatedBy: req.body?.referralUpdatedBy,
-    });
+    const body = req.body ?? {};
+    const args = {
+      recordId: body.recordId,
+      referralState: body.referralState,
+      referralUpdatedBy: body.referralUpdatedBy,
+    };
+    // Forward clinicianOutcome only when the request actually names the key -
+    // `'clinicianOutcome' in body` rather than `body.clinicianOutcome`, so a
+    // plain referral-state update (body has no such key at all) reaches the
+    // service as `undefined`, which SyncService.setReferralState treats as
+    // "leave the outcome alone" rather than "clear it".
+    if ('clinicianOutcome' in body) args.clinicianOutcome = body.clinicianOutcome;
+
+    const result = await service.setReferralState(args);
     if (!result.ok) return res.status(400).json(result);
     res.json(result);
   });

@@ -3,7 +3,7 @@ import { test, describe, beforeEach } from 'node:test';
 
 import { MemoryRepo } from '../src/memory_repo.js';
 import { SyncService } from '../src/service.js';
-import { REFERRAL_STATES, RECORD_SCHEMA } from '../src/validate.js';
+import { REFERRAL_STATES, RECORD_SCHEMA, CLINICIAN_OUTCOMES } from '../src/validate.js';
 
 const DEVICE = { whvId: 'whv-021', phcId: 'phc-042' };
 
@@ -273,6 +273,94 @@ describe('acknowledgements', () => {
         assert.ok(
           !state.toLowerCase().includes(word),
           `referral state "${state}" contains "${word}"`,
+        );
+      }
+    }
+  });
+});
+
+describe('clinician outcomes — the finding, distinct from the process', () => {
+  test('an outcome round-trips through the acks channel', async () => {
+    const r = record({ tier: 'RED' });
+    await service.ingest([r], DEVICE);
+    await service.setReferralState({
+      recordId: r.recordId,
+      referralState: 'seen_at_phc',
+      referralUpdatedBy: 'phc-042',
+      clinicianOutcome: 'confirmed',
+    });
+
+    const { acks } = await service.acks({ whvId: 'whv-021' });
+    assert.equal(acks.length, 1);
+    assert.equal(acks[0].referralState, 'seen_at_phc');
+    assert.equal(acks[0].clinicianOutcome, 'confirmed');
+    assert.ok(acks[0].clinicianOutcomeAt, 'the finding carries its own timestamp');
+  });
+
+  test('a referral-state-only update does not erase an existing outcome', async () => {
+    // The exact failure this design guards against: a dashboard user changing
+    // the follow-up dropdown after a clinician has already recorded a finding
+    // must not silently wipe that finding out from under them.
+    const r = record({ tier: 'RED' });
+    await service.ingest([r], DEVICE);
+    await service.setReferralState({
+      recordId: r.recordId,
+      referralState: 'seen_at_phc',
+      clinicianOutcome: 'confirmed',
+    });
+
+    await service.setReferralState({ recordId: r.recordId, referralState: 'closed' });
+
+    const { acks } = await service.acks({ whvId: 'whv-021' });
+    assert.equal(acks[0].referralState, 'closed');
+    assert.equal(acks[0].clinicianOutcome, 'confirmed', 'outcome must survive');
+  });
+
+  test('an unknown outcome is refused', async () => {
+    const r = record();
+    await service.ingest([r], DEVICE);
+
+    const res = await service.setReferralState({
+      recordId: r.recordId,
+      referralState: 'seen_at_phc',
+      clinicianOutcome: 'has_atrial_fibrillation',
+    });
+    assert.equal(res.ok, false);
+    assert.equal(res.code, 'invalid_clinician_outcome');
+  });
+
+  test('a record with no outcome yet reports null, not undefined or missing', async () => {
+    const r = record({ tier: 'RED' });
+    await service.ingest([r], DEVICE);
+    await service.setReferralState({ recordId: r.recordId, referralState: 'acknowledged' });
+
+    const { acks } = await service.acks({ whvId: 'whv-021' });
+    assert.equal(acks[0].clinicianOutcome, null);
+    assert.equal(acks[0].clinicianOutcomeAt, null);
+  });
+
+  test('inconclusive is a distinct outcome, not a rejection of the referral', async () => {
+    // CLAUDE.md / record.dart: inconclusive is NOT a negative. It must be
+    // representable as its own value, never coerced to not_confirmed.
+    const r = record({ tier: 'AMBER' });
+    await service.ingest([r], DEVICE);
+    await service.setReferralState({
+      recordId: r.recordId,
+      referralState: 'seen_at_phc',
+      clinicianOutcome: 'inconclusive',
+    });
+
+    const { acks } = await service.acks({ whvId: 'whv-021' });
+    assert.equal(acks[0].clinicianOutcome, 'inconclusive');
+  });
+
+  test('no clinician outcome names a condition', async () => {
+    const banned = ['fibrillation', 'arrhythmia', 'diagnos'];
+    for (const outcome of CLINICIAN_OUTCOMES) {
+      for (const word of banned) {
+        assert.ok(
+          !outcome.toLowerCase().includes(word),
+          `clinician outcome "${outcome}" contains "${word}"`,
         );
       }
     }

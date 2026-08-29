@@ -1,4 +1,4 @@
-import { checkRecord, forStorage, REFERRAL_STATES } from './validate.js';
+import { checkRecord, forStorage, REFERRAL_STATES, CLINICIAN_OUTCOMES } from './validate.js';
 
 /**
  * The sync service's behaviour, independent of MongoDB and of Express.
@@ -90,22 +90,50 @@ export class SyncService {
     return { acks, cursor };
   }
 
-  /** `POST /v1/acks`, written by the PHC dashboard. */
-  async setReferralState({ recordId, referralState, referralUpdatedBy }) {
+  /**
+   * `POST /v1/acks`, written by the PHC dashboard.
+   *
+   * `referralState` is still required on every call — the dropdown that has
+   * always driven this endpoint. `clinicianOutcome` is a separate, optional
+   * addition: the *finding*, distinct from the *process* referralState tracks
+   * (contracts/record.schema.json's own description of the two fields). A
+   * clinician sets it once, independently of whatever referral-state changes
+   * happen before or after.
+   *
+   * `clinicianOutcome` uses `undefined` to mean "not part of this call" and
+   * `null`/a valid value to mean "clear it" / "set it" — checked with `in`
+   * at the route, not with `??` here, because a plain referral-state update
+   * (the existing control) must never silently erase an outcome a clinician
+   * already recorded. Same discipline `forStorage()` already applies to
+   * `referralState` itself on the device-upload side.
+   */
+  async setReferralState({ recordId, referralState, referralUpdatedBy, clinicianOutcome }) {
     if (!REFERRAL_STATES.includes(referralState)) {
       return { ok: false, code: 'invalid_referral_state' };
     }
     if (typeof recordId !== 'string' || !recordId) {
       return { ok: false, code: 'missing_record_id' };
     }
+    if (clinicianOutcome !== undefined && !CLINICIAN_OUTCOMES.includes(clinicianOutcome)) {
+      return { ok: false, code: 'invalid_clinician_outcome' };
+    }
 
-    const updated = await this.repo.setReferralState({
+    const now = new Date().toISOString();
+    const patch = {
       recordId,
       referralState,
       referralUpdatedBy: referralUpdatedBy ?? null,
-      referralUpdatedAt: new Date().toISOString(),
-    });
+      referralUpdatedAt: now,
+    };
+    if (clinicianOutcome !== undefined) {
+      patch.clinicianOutcome = clinicianOutcome;
+      // The finding's own timestamp, not the process update's — a clinician
+      // recording an outcome three days after the referral was acknowledged
+      // should not appear to have happened at acknowledgement time.
+      patch.clinicianOutcomeAt = now;
+    }
 
+    const updated = await this.repo.setReferralState(patch);
     return updated ? { ok: true } : { ok: false, code: 'unknown_record' };
   }
 
