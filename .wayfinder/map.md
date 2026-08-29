@@ -99,6 +99,10 @@ not sample rows.
 - Whether ORANGE's 24h / YELLOW's 48h referral windows survive clinician review — landed
   in ticket 007 as PROVISIONAL, reasoned but not fitted, same status as the rest of
   `contracts/tiers.md` §3's DRAFT strings. Ticket 011 is where that review happens.
+- Whether the drafted Tamil text and its 239 spoken-number/segment audio clips (tickets
+  011, 015) hold up under native-speaker + clinician review — a complete AI-written draft
+  now exists to react to, which didn't before, but nothing in it has been reviewed. Not
+  usable with a real patient until that happens.
 - How sensitive the inferred motion gate should be — needs real disturbed captures from
   the hardware bring-up ticket before a threshold can be chosen honestly.
 - Whether the dashboard needs a per-patient timeline view — depends what the clinician
