@@ -1,0 +1,148 @@
+{
+ "source": "MIT-BIH AFDB, record-disjoint (one record = one patient)",
+ "window_seconds": 30.0,
+ "min_rr_intervals": 30,
+ "excluded_labels": [
+  "AFL",
+  "J"
+ ],
+ "n_records": 23,
+ "fit_records": [
+  "04015",
+  "04048",
+  "04126",
+  "04746",
+  "04908",
+  "05091",
+  "05121",
+  "06426",
+  "06995",
+  "07162",
+  "07910",
+  "08215",
+  "08219",
+  "08378",
+  "08405",
+  "08434",
+  "08455"
+ ],
+ "test_records": [
+  "04043",
+  "04936",
+  "05261",
+  "06453",
+  "07859",
+  "07879"
+ ],
+ "n_fit_windows": 17404,
+ "n_test_windows": 6216,
+ "fitted_thresholds_single_split": {
+  "nRmssdCentre": 0.2089717348757259,
+  "nRmssdWidth": 0.04770442644128444,
+  "pnn50Centre": 0.53959072075614,
+  "pnn50Width": 0.0857415782913754,
+  "entropyCentre": 0.8449641573355178,
+  "entropyWidth": 0.04254226495264095
+ },
+ "fitted_thresholds_final_all_records": {
+  "nRmssdCentre": 0.19380637121096772,
+  "nRmssdWidth": 0.05651807868084558,
+  "pnn50Centre": 0.4774800854272634,
+  "pnn50Width": 0.10233974710035719,
+  "entropyCentre": 0.8373089854970074,
+  "entropyWidth": 0.05075743010690335
+ },
+ "weights_unchanged": {
+  "wRmssd": 0.4,
+  "wPnn50": 0.3,
+  "wEntropy": 0.3
+ },
+ "gate_default": 0.5,
+ "gate_sensitivity_targeted": 0.676412038123605,
+ "gate_target_sensitivity": 0.9,
+ "held_out_test": {
+  "current_guess_gate_0.5": {
+   "tp": 2975,
+   "fp": 795,
+   "tn": 2429,
+   "fn": 17,
+   "sensitivity": 0.9943181818181818,
+   "specificity": 0.7534119106699751
+  },
+  "refitted_gate_0.5": {
+   "tp": 2408,
+   "fp": 186,
+   "tn": 3038,
+   "fn": 584,
+   "sensitivity": 0.8048128342245989,
+   "specificity": 0.9423076923076923
+  },
+  "refitted_gate_targeted": {
+   "tp": 1355,
+   "fp": 78,
+   "tn": 3146,
+   "fn": 1637,
+   "sensitivity": 0.45287433155080214,
+   "specificity": 0.9758064516129032
+  }
+ },
+ "fit_set": {
+  "current_guess_gate_0.5": {
+   "tp": 7344,
+   "fp": 3422,
+   "tn": 6632,
+   "fn": 6,
+   "sensitivity": 0.9991836734693877,
+   "specificity": 0.659637955042769
+  },
+  "refitted_gate_0.5": {
+   "tp": 7190,
+   "fp": 767,
+   "tn": 9287,
+   "fn": 160,
+   "sensitivity": 0.9782312925170068,
+   "specificity": 0.9237119554406207
+  },
+  "refitted_gate_targeted": {
+   "tp": 6616,
+   "fp": 277,
+   "tn": 9777,
+   "fn": 734,
+   "sensitivity": 0.9001360544217687,
+   "specificity": 0.9724487766063259
+  }
+ },
+ "cross_validation_5fold": {
+  "current_guess_gate_0.5": {
+   "se_mean": 0.9983637607898453,
+   "se_sd": 0.0024480392469774614,
+   "se_min": 0.9935593220338983,
+   "se_max": 1.0,
+   "sp_mean": 0.7019182411082804,
+   "sp_sd": 0.1694451811669932,
+   "sp_min": 0.48081264108352145,
+   "sp_max": 0.8813636363636363
+  },
+  "refitted_gate_0.5": {
+   "se_mean": 0.9565737022230998,
+   "se_sd": 0.05039969458594668,
+   "se_min": 0.86,
+   "se_max": 0.9973021582733813,
+   "sp_mean": 0.9106686719179635,
+   "sp_sd": 0.07336766089708872,
+   "sp_min": 0.7929500342231348,
+   "sp_max": 0.985
+  },
+  "refitted_gate_targeted": {
+   "se_mean": 0.8762598993249988,
+   "se_sd": 0.15603718758841842,
+   "se_min": 0.5738983050847457,
+   "se_max": 0.989658273381295,
+   "sp_mean": 0.9474598644971912,
+   "sp_sd": 0.0436609249815595,
+   "sp_min": 0.8726899383983573,
+   "sp_max": 0.9890909090909091
+  }
+ },
+ "recommendation": "Ship fitted_thresholds_final_all_records with gate LEFT AT 0.5. The sensitivity-targeted gate does not survive cross-validation with only 23 patients (see cross_validation_5fold.refitted_gate_targeted se_sd/range) - it hits its target on the patients it was tuned on and misses badly on the ones held out from it. Expected performance is the 5-fold CV numbers (refitted_gate_0.5), not a number measured directly on the final fit, since there is no data left to hold out from a fit that intentionally uses all of it."
+}

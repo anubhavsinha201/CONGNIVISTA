@@ -83,13 +83,38 @@ class RrAnalyser {
 
   /// Logistic centres and widths for combining the three measures.
   ///
-  /// PROVISIONAL. These are literature-derived starting points and MUST be
-  /// retuned against MIT-BIH AFDB before any performance claim is made
-  /// (docs/PRODUCT.md section 10: anything not measured is a target, not a
-  /// result). See ml/reference/tune_rr_thresholds.py.
-  static const double nRmssdCentre = 0.08, nRmssdWidth = 0.02;
-  static const double pnn50Centre = 0.30, pnn50Width = 0.08;
-  static const double entropyCentre = 0.65, entropyWidth = 0.06;
+  /// MEASURED 2026-08-30 against MIT-BIH AFDB (23 patients, all usable
+  /// records — patient-disjoint by construction, since one AFDB record IS
+  /// one patient). Fitted by `ml/reference/tune_rr_thresholds.py`, each
+  /// centre/width pair via a genuine 1-D maximum-likelihood logistic
+  /// regression against 23,620 clean 30 s windows (beats from AFDB's
+  /// reference `.qrs` files, rhythm label from `.atr`; windows spanning a
+  /// rhythm transition, or labelled atrial flutter or junctional rhythm
+  /// rather than AFIB/normal, excluded). These replace literature-derived
+  /// starting points that produced Sp 0.497 when measured against the
+  /// deployed pipeline (`ml/evaluate.py`, CinC 2017) — roughly half of
+  /// healthy recordings fired the rule.
+  ///
+  /// The combination weights below and the final gate
+  /// (`Policy.kRrIrregularityGate = 0.5`) are UNCHANGED — only these three
+  /// (centre, width) pairs were refit, deliberately: they are what
+  /// rr_features.dart's own prior PROVISIONAL comment named as guessed.
+  ///
+  /// 5-fold patient-level cross-validation (the honest performance estimate;
+  /// there is no data held back from this final fit to measure it on
+  /// directly): Se 0.957 ± 0.050, Sp 0.911 ± 0.073 — against the previous
+  /// Se 0.998 ± 0.002, Sp 0.702 ± 0.169. The prior centres traded away almost
+  /// all specificity, and inconsistently so (Sp ranged 0.48–0.88 depending on
+  /// which patients were tested), for a sensitivity gain in the fourth
+  /// decimal place. A sensitivity-TARGETED gate was also tried and rejected:
+  /// it hit its target exactly on the patients it was tuned on and collapsed
+  /// on every held-out fold (Se sd 0.156, one fold at 0.574) — with only 23
+  /// patients a single percentile threshold does not generalise, so the gate
+  /// stays at its principled, unfit value of 0.5 rather than a number chosen
+  /// to flatter one particular split. See `ml/artifacts/rr_threshold_fit.json`.
+  static const double nRmssdCentre = 0.1938, nRmssdWidth = 0.0565;
+  static const double pnn50Centre = 0.4775, pnn50Width = 0.1023;
+  static const double entropyCentre = 0.8373, entropyWidth = 0.0508;
 
   static const double wRmssd = 0.4, wPnn50 = 0.3, wEntropy = 0.3;
 

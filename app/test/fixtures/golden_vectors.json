@@ -7589,7 +7589,7 @@
     "normalisedRmssd": 0.01352365366828134,
     "pnn50": 0.0,
     "normalisedShannonEntropy": 0.8001264927697351,
-    "irregularityScore": 0.29808529228469327,
+    "irregularityScore": 0.11604094014810543,
     "rejectedIntervals": 0
    },
    "expectedSqi": {
@@ -15208,7 +15208,7 @@
     "normalisedRmssd": 0.3949804292116113,
     "pnn50": 0.813953488372093,
     "normalisedShannonEntropy": 0.8075858469752965,
-    "irregularityScore": 0.9792772978294018,
+    "irregularityScore": 0.7855005307464734,
     "rejectedIntervals": 0
    },
    "expectedSqi": {
@@ -22807,7 +22807,7 @@
     "normalisedRmssd": 0.01352365366828134,
     "pnn50": 0.0,
     "normalisedShannonEntropy": 0.8001264927697351,
-    "irregularityScore": 0.29808529228469327,
+    "irregularityScore": 0.11604094014810543,
     "rejectedIntervals": 0
    },
    "expectedSqi": {
@@ -30434,7 +30434,7 @@
     "normalisedRmssd": 0.27579800794573034,
     "pnn50": 0.8297872340425532,
     "normalisedShannonEntropy": 0.9365392797431076,
-    "irregularityScore": 0.997070417046951,
+    "irregularityScore": 0.8775406961482322,
     "rejectedIntervals": 0
    },
    "expectedSqi": {

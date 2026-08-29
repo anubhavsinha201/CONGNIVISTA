@@ -258,9 +258,13 @@ MIN_PLAUSIBLE_RR_MS = 300.0
 MAX_PLAUSIBLE_RR_MS = 2000.0
 HISTOGRAM_BINS = 16
 
-N_RMSSD_CENTRE, N_RMSSD_WIDTH = 0.08, 0.02
-PNN50_CENTRE, PNN50_WIDTH = 0.30, 0.08
-ENTROPY_CENTRE, ENTROPY_WIDTH = 0.65, 0.06
+# MEASURED 2026-08-30 against MIT-BIH AFDB (23 patients, all usable records).
+# See app/lib/signal/rr_features.dart's doc comment for the full derivation
+# and ml/reference/tune_rr_thresholds.py / ml/artifacts/rr_threshold_fit.json
+# for the fitting script and its output. Both must be changed together.
+N_RMSSD_CENTRE, N_RMSSD_WIDTH = 0.1938, 0.0565
+PNN50_CENTRE, PNN50_WIDTH = 0.4775, 0.1023
+ENTROPY_CENTRE, ENTROPY_WIDTH = 0.8373, 0.0508
 W_RMSSD, W_PNN50, W_ENTROPY = 0.4, 0.3, 0.3
 
 
