@@ -13,6 +13,10 @@ app/build/
 app/.packages
 app/pubspec.lock
 
+# PlatformIO build output and downloaded toolchains/libraries — regenerated
+# by `pio run`, tens of MB, never belongs in git history.
+firmware/.pio/
+
 # Python
 __pycache__/
 *.pyc

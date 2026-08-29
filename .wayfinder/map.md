@@ -35,8 +35,8 @@ Reached when a stranger can be handed the phone and the unit and walk that loop.
 | Built and verified | Signal chain, SQI, PPG + fusion, policy, patient history, INT8-calibrated model (83 KB), encrypted queue, sync engine, sync service (33 tests), read-only dashboard |
 | **Never compiled** | All ~3,900 lines of Dart. No Dart SDK has ever touched it |
 | Absent | `main.dart`, any UI, BLE, `SignalSource`, Tamil strings, replay traces |
-| **Firmware drafted, uncompiled** | `firmware/` has a full `main.cpp` against `ble.md`/`ppg.md` now, but no PlatformIO here to build it and no Python-mirror equivalent to verify it against — see ticket 013 |
-| Toolchain | **No Flutter, Dart, adb, Android SDK, or PlatformIO installed.** Node only |
+| **Firmware compiles, not yet flashed** | `firmware/main.cpp` against `ble.md`/`ppg.md` now builds clean via `pio run` (RAM 12.2%, Flash 88.5%) — not yet run on real hardware. See ticket 013 |
+| Toolchain | **PlatformIO now installed** (`pip install platformio`, was already present, just not on `PATH`) and confirmed working. Still no Flutter, Dart, adb, or Android SDK |
 | Hardware | ESP32 + AD8232 + MAX30102. Breadboarded, **never produced a clean trace** |
 | **MPU-6050 dropped** | The motion gate loses its sensor. Motion becomes **inferred** from ECG baseline wander and PPG perfusion instability — both measured on the patient, unlike the phone's accelerometer. 19 files reference it as of charting |
 

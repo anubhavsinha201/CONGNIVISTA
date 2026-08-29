@@ -14,3 +14,9 @@ paths, and any driver/signing gotchas hit along the way.
 
 Blocked by: none — frontier.
 Blocks: 002 (First compile of the Dart), 013 (ESP32 firmware, via 003).
+
+**Partial, unplanned progress:** PlatformIO — the one piece of this ticket's scope that
+013 actually needed — turned out to already be installed on the machine, just not on
+`PATH`; confirmed working (`pio run` compiles `firmware/` clean). That does not touch
+this ticket's real subject (Flutter, the Android SDK, adb, a first APK on a physical
+phone) — still genuinely blocked on a phone in hand.

@@ -1,7 +1,7 @@
 # 013 — ESP32 firmware
 
-`wayfinder:task` · Status: **CODE DRAFTED, UNVERIFIED** · commit `6ebf74e` · blocked
-on 001 (PlatformIO, to compile) and 003 (hardware, to test) for actual verification
+`wayfinder:task` · Status: **COMPILES CLEAN, NOT YET FLASHED** · commit `6ebf74e` ·
+still blocked on 003 (real hardware, to actually test)
 
 ## Question
 
@@ -16,16 +16,34 @@ Blocked by: 003 (Prove the AD8232), 001 (Toolchain bring-up — for PlatformIO).
 ~~006 (Inferred motion gate)~~ — closed; the 4-byte status frame in `contracts/ble.md`
 §4 is now settled and ready to implement against.
 
-## Resolution (partial — code only, not verified)
+## Resolution (partial — compiles, not yet run on real hardware)
 
-**This ticket is not actually closeable from here, and is not being marked closed.**
+**Update:** PlatformIO turned out to already be installed on this machine (just not on
+`PATH`) — installed 001's one real dependency for this ticket without needing the rest of
+001's Android/Flutter scope. `pio run` against `firmware/` **succeeded on the first true
+attempt** (`SUCCESS`, 6.06s, board `esp32dev`, resolved `framework-arduinoespressif32
+@3.20017`, `SparkFun MAX3010x @1.1.2`, `ESP32 BLE Arduino @2.0.0`). RAM 12.2%, Flash
+88.5% (1,160,285 / 1,310,720 B — tight, mostly the classic BLE stack; a custom partition
+table or NimBLE-Arduino are the fixes if that becomes a real constraint later).
+
+This resolves most of the "named, not resolved" list below by construction — a wrong
+`getValue()` return type, a wrong `esp_timer_create_args_t` field, or a wrong MAX3010x
+method signature would all have been compile errors, and none were. **What compiling
+does NOT prove:** that the timing is actually right, that the BLE stack behaves under a
+real connection, that the MAX30102 initializes correctly against real silicon, or that
+any of the five pin numbers are wired correctly — that needs an actual board, which is
+still ticket 003's job. One real (and initially confusing) non-code failure hit along the
+way: the first `pio run` failed with `WinError 183` creating `.pio/build/esp32dev` —
+OneDrive racing PlatformIO's directory creation, since this repo lives inside a
+OneDrive-synced folder. Not a code bug; a plain retry succeeded. Worth knowing if it
+recurs on a clean `.pio` wipe.
+
 Every other AFK ticket in this tracker had a Python mirror to run the result against
 (`ml/reference/validate_*.py`) — the whole point of the architecture described at the top
-of CLAUDE.md. There is no equivalent for firmware C++: nothing in this environment can
-compile it (no PlatformIO — confirmed absent, `.wayfinder/map.md`'s own "Ground truth"
-table), let alone flash it and watch a real AD8232 trace come back. What's here is
-source written carefully against `contracts/ble.md` and `contracts/ppg.md` (both LOCKED),
-not a tested result.
+of CLAUDE.md. There still isn't an equivalent for firmware behavior once it's running —
+compiling is real evidence, but it is not the same evidence a flash-and-run against the
+real AD8232 gives. What's here is now source that provably builds against
+`contracts/ble.md` and `contracts/ppg.md` (both LOCKED), not yet a tested runtime result.
 
 `firmware/platformio.ini` + `firmware/src/main.cpp`, ~370 lines. Implements:
 
@@ -56,24 +74,20 @@ not a tested result.
 adding a second, equally-unverified transport on top of an already-unverified primary
 one would only compound the risk, not reduce it.
 
-**Named, not resolved — the specific things to check first when this actually gets
-compiled:**
+**Resolved by the successful compile (2, 3, 4, 5 below) vs. still open (1):**
 
-1. Pin numbers in the `PIN ASSIGNMENTS` block at the top of `main.cpp` are this file's
-   own invention, not sourced from any contract or wiring diagram — verify against the
-   real breadboard from ticket 003 before flashing.
-2. The SparkFun MAX3010x library's `setup()`/`check()`/`getFIFOIR()`/`nextSample()`
-   calls are written against that library's long-stable public API, but the exact
-   version PlatformIO resolves (unpinned in `platformio.ini`) hasn't been checked.
-3. `BLECharacteristic::getValue()` is called expecting `std::string`; some arduino-esp32
-   core versions have returned `String` there instead — one-line fix if so.
-4. `esp_timer_create_args_t`'s field set is written against the long-stable esp-idf
-   shape; verify against whatever esp-idf version ships with the resolved core.
-5. `ADC_11db` attenuation enum naming has drifted across arduino-esp32 major versions
-   (2.x vs. 3.x) — verify it resolves, or use whatever the installed core calls it.
+1. **Still open.** Pin numbers in the `PIN ASSIGNMENTS` block — updated from a placeholder
+   to the user's actual confirmed wiring map (classic ESP32, GPIO34/32/33/21/22) in a
+   later commit, but "the code references the right GPIO numbers" and "the board is
+   correctly wired to match" are two different claims. Only ticket 003 settles the second.
+2. ~~SparkFun MAX3010x API~~ — resolved at `@1.1.2`, compiled clean.
+3. ~~`getValue()` return type~~ — `std::string` was correct for the resolved
+   `ESP32 BLE Arduino @2.0.0`.
+4. ~~`esp_timer_create_args_t` fields~~ — compiled clean against the resolved esp-idf.
+5. ~~`ADC_11db` naming~~ — resolved, compiled clean.
 
-None of these are guesses I'm confident enough in to call this "done." They're the
-punch list for whoever runs `pio run` first.
+What's still genuinely unverified: real timing behavior, real BLE connection stability,
+real MAX30102 init against actual silicon, and whether pin 1's numbers match the physical
+board. None of that is provable without ticket 003's hardware.
 
-Pushed as `6ebf74e` on `main` — as source to review and compile against, not as a
-verified result.
+Pushed as `6ebf74e` (source) and this update as a later commit on `main`.
