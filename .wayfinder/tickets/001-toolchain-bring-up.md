@@ -4,10 +4,13 @@
 
 ## Question
 
-Get Flutter, the Android SDK, and adb installed, and get *any* APK onto the target phone.
-The first `flutter run` on a physical device is where OEM drivers, Gradle, and signing
-config all fail at once — this ticket exists to absorb that cost once, deliberately,
-rather than discover it mid-demo.
+**Retargeted 2026-08-30: Android Studio + Kotlin instead of Flutter**, per ticket 019 —
+the underlying need is identical (Android SDK, adb, a first app installed on the target
+phone), just via Gradle/Android Studio's run flow instead of `flutter run`. Get Android
+Studio, the Android SDK, and adb installed, and get *any* app onto the target phone.
+The first on-device run is where OEM drivers, Gradle, and signing config all fail at
+once — this ticket exists to absorb that cost once, deliberately, rather than discover
+it mid-demo.
 
 Resolution should record: which machine, which phone (model + Android version), SDK
 paths, and any driver/signing gotchas hit along the way.

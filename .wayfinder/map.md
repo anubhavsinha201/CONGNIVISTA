@@ -41,11 +41,11 @@ not sample rows.
 
 | | |
 |---|---|
-| Built and verified | Signal chain, SQI, PPG + fusion, policy, patient history, INT8-calibrated model (83 KB), encrypted queue, sync engine, sync service (33 tests), read-only dashboard |
-| **Never compiled** | All ~3,900 lines of Dart. No Dart SDK has ever touched it |
-| Absent | `main.dart`, any UI, BLE, `SignalSource`, Tamil strings, replay traces |
-| **Firmware flashed, boots clean on real hardware** | Real ESP32-D0WD-V3 (MAC `70:4b:ca:56:b1:10`) over COM7. Boot log confirmed live: I2C up, real MAX30102 answered, BLE advertising started, no crash/reset loop. BLE-visibility-to-a-phone and AD8232 electrode signal still untested. See ticket 013 |
-| Toolchain | **PlatformIO installed and proven** (`pio run`, `pio run -t upload` both real successes). Still no Flutter, Dart, adb, or Android SDK |
+| Built and verified | Signal chain, SQI, PPG + fusion, policy, patient history, INT8-calibrated model (83 KB), encrypted queue, sync engine, sync service (33 tests), read-only dashboard — **all as the Python-verified spec; the Dart implementation of these is now superseded, see below** |
+| **App target changed 2026-08-30** | Flutter/Dart → native Android/Kotlin (ticket 019, user decision, reverses CLAUDE.md's prior "central architectural fact"). The ~3,900 lines of Dart never got compiled and now never will — kept as the module-by-module reference the Kotlin port is built against. Python mirrors are unaffected; they were always the verified side |
+| Absent | `main.dart`/Kotlin equivalent, any UI, BLE, `SignalSource`, Tamil strings, replay traces — all still to be written, now directly in Kotlin |
+| **Firmware flashed, boots clean on real hardware** | Real ESP32-D0WD-V3 (MAC `70:4b:ca:56:b1:10`) over COM7. Boot log confirmed live: I2C up, real MAX30102 answered, BLE advertising started, no crash/reset loop. BLE-visibility-to-a-phone confirmed via nRF Connect; PPG showing flat/low readings (open problem, not yet root-caused); AD8232 electrode signal still untested. See ticket 013 |
+| Toolchain | **PlatformIO installed and proven.** Android Studio (Kotlin/Gradle/Android SDK) installing as of 2026-08-30, ticket 019/001 |
 | Hardware | ESP32 + AD8232 + MAX30102, real board now connected via USB (CP210x, Windows auto-driver). I2C side (MAX30102) proven; AD8232 electrode trace **still never produced** — that's ticket 003 |
 | **MPU-6050 dropped** | The motion gate loses its sensor. Motion becomes **inferred** from ECG baseline wander and PPG perfusion instability — both measured on the patient, unlike the phone's accelerometer. 19 files reference it as of charting |
 

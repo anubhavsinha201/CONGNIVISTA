@@ -42,17 +42,23 @@ it works.
 
 ## The central architectural fact
 
-**Every Dart signal module has a line-for-line Python twin, and the Python is the
-verified side.**
+**Every signal module has a line-for-line Python twin, and the Python is the verified
+side.** This was true of the Dart implementation and stays true of its replacement.
+
+**2026-08-30: the app target moved from Flutter/Dart to native Android/Kotlin** (ticket
+019, user decision). `app/lib/*.dart` (~3,900 lines, Python-verified, never
+Dart-compiled) is no longer the deliverable — it remains in the repo as the reference
+the Kotlin port is built against, module by module. The diagram below describes the
+pinning relationship itself, which does not change with the target language:
 
 ```
-app/lib/signal/*.dart   <--pinned to-->   ml/reference/*.py
-        |                                        |
-   the deliverable                     scipy-checked, run against
-   (no Dart SDK needed                 synthetic signals with exact
-    to verify it)                      known ground truth
-                                                 |
-                                       app/test/fixtures/golden_vectors.json
+[Dart, superseded] or [Kotlin, current]   <--pinned to-->   ml/reference/*.py
+        |                                                          |
+   the deliverable                                       scipy-checked, run against
+   (no compiler needed                                   synthetic signals with exact
+    to verify the spec)                                  known ground truth
+                                                                    |
+                                                          app/test/fixtures/golden_vectors.json
 ```
 
 The Python validates the algorithms independently (filter coefficients against
@@ -76,13 +82,18 @@ tests fail loudly when they drift — that is the point. Three suites must stay 
 ## Commands
 
 ```bash
-# --- Flutter app ---
+# --- Flutter app [SUPERSEDED 2026-08-30, ticket 019 - kept as historical reference,
+#     app/lib/*.dart is no longer the deliverable, do not expect these to matter now] ---
 cd app && flutter pub get
 cd app && flutter analyze                       # no analysis_options.yaml yet; see Gotchas
 cd app && flutter test                          # all tests
 cd app && flutter test test/policy_test.dart    # one file
 cd app && flutter test --plain-name "irregular, normal rate, first time -> YELLOW"   # one test
 cd app && flutter run
+
+# --- Kotlin/Android app [current target, ticket 019 - fill in once the project scaffold exists] ---
+# cd android && ./gradlew test
+# cd android && ./gradlew installDebug
 
 # --- ML pipeline ---
 # MUST source wsl_env.sh, not the venv directly. See Gotchas.
@@ -119,10 +130,11 @@ Only mark something built after checking — several directories are still empty
 | Path | Status |
 |---|---|
 | `contracts/` | **Built.** BLE wire format, record schema, tier policy, model I/O, PPG. Single source of truth. |
-| `app/lib/signal/`, `app/lib/core/policy.dart` | **Built and verified — but never compiled.** No Dart SDK has run against it; expect small fixes on first `flutter test`. |
+| `app/lib/signal/`, `app/lib/core/policy.dart` | **Superseded, kept as the port reference.** Python-verified, never Dart-compiled, and now never will be — ticket 019 ports this to Kotlin. |
 | `ml/` | **Built.** Preprocessing, training, INT8 calibration, evaluation, Python reference. |
-| `app/assets/models/af_int8.tflite` | **Shipped.** seed 0, calibrated. |
-| `app/lib/data/` | **Built, never compiled.** Offline queue (SQLCipher), pseudo-ID, sync engine, scheduler. Logic verified through the Python mirror, not by a Dart run. |
+| `app/assets/models/af_int8.tflite` | **Shipped.** seed 0, calibrated. Still the right model file for the Kotlin port to load. |
+| `app/lib/data/` | **Superseded, kept as the port reference.** Offline queue (SQLCipher), pseudo-ID, sync engine, scheduler — same status as `app/lib/signal/` above. |
+| `android/` | **Not yet scaffolded.** Toolchain (Android Studio) installing as of 2026-08-30 — ticket 019. |
 | `server/` | **Built and tested.** 33 passing tests plus a live end-to-end run. MongoDB sync service — see [server/README.md](server/README.md). |
 | `dashboard/` | **Built.** Static referral queue + risk map, no CDN. |
 | `firmware/` | **Drafted, never compiled.** No PlatformIO in this environment — see ticket 013. |

@@ -1,6 +1,9 @@
 # 002 — First compile of the Dart
 
-`wayfinder:task` · AFK · Status: **blocked**
+`wayfinder:task` · AFK · Status: **SUPERSEDED by ticket 019** (2026-08-30) — the app
+target moved from Flutter/Dart to native Android/Kotlin; there is no more Dart to
+compile toward. Left in place, not deleted, as the record of what was true before the
+pivot.
 
 ## Question
 
