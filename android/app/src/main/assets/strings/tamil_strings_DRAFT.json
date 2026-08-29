@@ -27,7 +27,7 @@
     "why.rate.high": { "ta": "இதயத் துடிப்பு வழக்கத்தை விட வேகமாக இருந்தது: நிமிடத்திற்கு {hr} துடிப்புகள்.", "en": "Heart rate was faster than usual: {hr} beats per minute." },
     "why.rate.normal": { "ta": "இதயத் துடிப்பு வழக்கமான அளவில் இருந்தது: நிமிடத்திற்கு {hr} துடிப்புகள்.", "en": "Heart rate was in the usual range: {hr} beats per minute." },
     "why.ppg.pulseDeficit": { "ta": "சில இதயத் துடிப்புகள் விரல் நுனியில் நாடித் துடிப்பாக உணரப்படவில்லை: நிமிடத்திற்கு {deficit} துடிப்புகள்.", "en": "Some heartbeats did not produce a pulse at the fingertip: {deficit} beats per minute." },
-    "why.ppg.nonPerfusing": { "ta": "சில இதயத் துடிப்புகள் விரல் நுனியில் உணரப்படவில்லை: {perfused} துடிப்புகள் உணரப்பட்டன.", "en": "Some heartbeats were not felt at the fingertip: {perfused} of beats were." },
+    "why.ppg.nonPerfusing": { "ta": "சில இதயத் துடிப்புகள் விரல் நுனியில் உணரப்படவில்லை: {perfused} சதவீத துடிப்புகள் உணரப்பட்டன.", "en": "Some heartbeats were not felt at the fingertip: {perfused} of beats were." },
     "why.ppg.agreed": { "ta": "விரல் நுனி நாடித் துடிப்பு இதயத் துடிப்பு முறையுடன் பொருந்தியது.", "en": "The fingertip pulse matched the heartbeat pattern." },
     "why.ppg.unusable": { "ta": "விரல் நுனி சென்சார் பதிவைப் பயன்படுத்த முடியவில்லை.", "en": "The fingertip sensor reading could not be used." },
     "why.repeat.never_screened": { "ta": "இந்த நோயாளி முன்பு பரிசோதிக்கப்படவில்லை.", "en": "This patient has not been screened before." },

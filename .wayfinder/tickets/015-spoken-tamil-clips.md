@@ -1,7 +1,8 @@
 # 015 — Spoken Tamil clips
 
-`wayfinder:task` · Status: **6 real Tamil audio clips generated and verified — ticket
-011's human review is the only thing left before any of this can reach a real patient**
+`wayfinder:task` · Status: **All 39 strings now have real, verified audio — 6 whole-clip
+tier strings plus all 33 explanation reasons via stitched segments. Ticket 011's human
+review is the only thing left before any of this can reach a real patient**
 
 ## Question
 
@@ -61,3 +62,43 @@ exist specifically to stop unreviewed text like this reaching a real worker or p
 should be used with a real patient until that review happens. What it's actually for:
 giving a Tamil-speaking reviewer and a clinician a concrete draft to correct, and proving
 the technical pipeline end to end, rather than starting ticket 011 from a blank page.
+
+## The remaining 33 explanation strings — done too, user-requested extension (2026-08-30)
+
+User asked for audio on all 33 `why.*` reasons, explicitly proposing the right shape for
+it unprompted: generate word-by-word and stitch at playback, "like Indian Railways" — a
+station PA doesn't synthesize "train number 12621 is arriving" as one recording, it plays
+pre-recorded segments back-to-back. That is exactly right for this problem and is what
+got built, not a simplification of the request.
+
+**Why this needed a real design, not just "call the API 33 more times":** 10 of the 33
+strings embed a live value (`{hr}`, `{sqi}`, a per-patient pulse deficit...) that's
+different every screening — no single pre-rendered file can hold that. The other 23 are
+fixed sentences, no different from the 6 tier strings already done.
+
+- **23 fixed strings** → one whole-clip each, same as the tier strings.
+- **10 dynamic strings** → decomposed into fixed prefix/suffix segments plus a **shared
+  0–200 number vocabulary**. Numbers are NOT digit-by-digit concatenation - Tamil number
+  words aren't compositional that way ("42" is one word, "நாற்பத்திரெண்டு", not "நான்கு"
+  then "இரண்டு", the same reason real railway PA systems pre-record whole numbers rather
+  than splice digits). Every number 0-200 was synthesized once by ElevenLabs' own Tamil
+  pronunciation, sidestepping the need to hand-code Tamil numeral grammar (sandhi at the
+  tens/units boundary is real and not something to get confidently right by hand).
+- `tamil_audio_manifest_DRAFT.json` — the exact segmentation for all 33 keys: which
+  fixed-segment IDs, in what order, with `{num: field}` markers for where a number slots
+  in. Same DRAFT status as the text it splits — it changes no wording, only makes it
+  stitchable.
+- `android/scripts/generate_tamil_segments.py` — generated all **239 clips** (38 fixed
+  segments + 201 numbers) for real, with retry/backoff on rate limiting since this was a
+  large batch. All 239 verified with real `ID3` MP3 headers, not assumed from HTTP 200s.
+- `ExplanationAudio.kt` — pure, testable resolver: given a key and its substitution
+  values (the same `Reason.values` map `Explainer` already produces), returns the ordered
+  list of clip paths to play back-to-back. Out-of-range numbers (rare; realistic clinical
+  values fit well inside 0–200) clamp to the nearest bound rather than crashing a
+  sentence over one edge-case number. 7 new tests, including one that resolves all 33
+  `EXPLANATION_KEYS` with realistic values and confirms every referenced file genuinely
+  exists on disk — not just that the composition logic runs.
+
+Still true, unchanged by this: nothing here is reviewed, and playback itself
+(`MediaPlayer`, sequencing the list this class returns) still needs ticket 010's UI to
+exist and a real device to verify. `gradle testDebugUnitTest`: **65/65 passing.**
