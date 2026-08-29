@@ -1,0 +1,11 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application
+        android:label="ArogyaX"
+        android:allowBackup="false">
+        <!-- No activity yet - UI is ticket 010, not started. This manifest exists
+             so the signal-chain port (ticket 019) has somewhere to compile and
+             unit-test against, same role app/lib/*.dart played with no Dart SDK. -->
+    </application>
+
+</manifest>

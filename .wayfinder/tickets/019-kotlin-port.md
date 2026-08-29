@@ -1,6 +1,7 @@
 # 019 — Port the app from Flutter/Dart to native Android (Kotlin)
 
-`wayfinder:task` · Status: **open — toolchain installing**
+`wayfinder:task` · Status: **module 1 (signal chain) ported and verified against real
+Gradle build** — modules 2-7 not started
 
 ## Question
 
@@ -60,6 +61,50 @@ what Flutter+Android-SDK used to need two for. Installing now via
 Blocked by: nothing to start the toolchain install. Actual porting work is next.
 Blocks: everything client-side — 009, 010, 011 (unaffected content-wise, just a new
 consumer), 012, 014 all now target Kotlin instead of Dart.
+
+## Progress (2026-08-30)
+
+**Toolchain, hand-assembled (no interactive Android Studio wizard available):**
+`android/` project created by hand — `settings.gradle.kts`, root and `app/build.gradle.kts`,
+`AndroidManifest.xml` (no activity yet; ticket 010 hasn't started). AGP 8.6.0 / Gradle 8.9 /
+Kotlin 2.0.21, chosen deliberately over the current stable AGP 9.0 / Gradle 9.5 — AGP 9's
+built-in-Kotlin-support change is too recent to be confident of its exact syntax without a
+real reference project to check against, and correctness mattered more here than being on
+the latest release. Android Studio's bundled JBR is JDK 25, which Gradle 8.9 doesn't
+support (`gradle wrapper` failed outright); installed Temurin 17 separately and pointed
+`JAVA_HOME` at it, which resolved it.
+
+**Known gap: no `gradlew` committed yet.** The `wrapper` task's distribution-URL
+validation step (`Test of distribution url https://services.gradle.org/... failed`) fails
+consistently in this environment even though normal dependency downloads (AGP, Kotlin
+plugin, junit, org.json — all resolved fine) clearly work — looks like that specific
+validation request is blocked while general Maven/Google traffic isn't. Not chased further;
+builds run fine against a locally-extracted Gradle 8.9 in the meantime. Whoever picks this
+up next: either retry `gradle wrapper --gradle-version 8.9` from a network that allows it,
+or install Gradle 8.9 directly and build with that.
+
+**Module 1 (signal chain) ported and verified — real, not assumed:**
+`android/app/src/main/kotlin/com/arogyax/signal/`: `Filters.kt` (Biquad + FilterChain,
+RBJ cookbook coefficients, filtfilt with odd-reflection padding), `PanTompkins.kt`
+(R-peak detection, adaptive dual-threshold, searchback, T-wave rejection),
+`RrFeatures.kt` (RMSSD/pNN50/Shannon entropy, the AFDB-fitted logistic constants from
+`rr_features.dart`), `Sqi.kt` (saturation/flatline/powerline/wander, Goertzel band power).
+Line-for-line translations of the Dart source, not reimplementations from the algorithm
+description — deliberately, to minimize the chance of introducing a new bug while
+changing language.
+
+`GoldenVectorsTest.kt` loads the exact same `app/test/fixtures/golden_vectors.json` the
+Dart tests were meant to use and asserts at the same 1e-6 tolerance CLAUDE.md specifies.
+Ran for real via `gradle testDebugUnitTest`: **4/4 tests passed, 0 failures** — SQI fields,
+exact R-peak indices, and all RR-feature fields match across all 4 synthetic cases
+(nsr_clean, af_clean, nsr_mains, af_noisy). One real bug caught and fixed along the way:
+Kotlin nests block comments (Java/Dart don't), so a KDoc comment containing the literal
+text `signal/*.dart` was parsed as opening a nested comment and broke the build with
+"Unclosed comment" — reworded, not suppressed.
+
+**Not ported yet:** `analysis.dart`'s `EcgAnalyser` orchestrator (module 1 is the four
+pieces it calls, not the orchestrator itself — needs `Policy` from module 3 first, so it
+waits), and modules 2-7 from the scope list above.
 
 ## Note on the rest of the tracker
 
