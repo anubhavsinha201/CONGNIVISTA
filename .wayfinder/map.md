@@ -49,6 +49,10 @@ Reached when a stranger can be handed the phone and the unit and walk that loop.
   `POST /v1/acks` now accepts `clinicianOutcome` alongside `referralState`, without
   either ever clobbering the other; dashboard gained an independent outcome control.
   `20bd8c1`.
+- [006 — Replace the motion gate with inferred motion](tickets/006-inferred-motion-gate.md)
+  — motion now OR's ECG baseline wander with PPG perfusion instability; both thresholds
+  PROVISIONAL pending real disturbed captures (ticket 003). Unblocks firmware's BLE
+  frame layout. `6e3381c`.
 
 ## Not yet specified
 

@@ -1,6 +1,6 @@
 # 006 — Replace the motion gate with inferred motion
 
-`wayfinder:task` · AFK · Status: **open — takeable now**
+`wayfinder:task` · AFK · Status: **CLOSED (code)** · commit `6e3381c` · threshold tuning still fog
 
 ## Question
 
@@ -30,4 +30,44 @@ the worker, so retake hints must degrade honestly rather than guess a cause they
 
 Blocked by: none for the code change — frontier. Threshold *tuning* is blocked by 003's
 disturbed-trace capture (tracked in map's "Not yet specified").
-Blocks: 013 (ESP32 firmware — settles the BLE frame layout).
+Blocks: 013 (ESP32 firmware — settles the BLE frame layout). **Now unblocked on this leg**
+— 013 still waits on 001 (toolchain) and 003 (hardware bring-up).
+
+## Resolution
+
+Motion re-derived rather than removed: OR of ECG baseline wander (`sqi.dart`, always
+available) and PPG perfusion instability (`ppg.dart`, new — corroborates when a
+simultaneous usable capture exists). Same sensitivity-biased OR pattern the two AF
+detectors already use.
+
+`EcgAnalyser.analyse()` now takes an optional `PpgResult` instead of the IMU's
+`motionVarMilliG` list. **Zero Dart call sites needed updating** — `EcgAnalyser` is never
+instantiated by any existing test, only referenced in comments, so this ticket's Dart
+change has no test blast radius at all.
+
+Contracts brought in phase: `ble.md`'s status frame shrinks 6→4 bytes, with the freed IMU
+flag bit **reserved rather than reused** — so old firmware built against the prior
+contract fails visibly instead of silently setting a bit nothing reads anymore. `ppg.md`
+gains the stability signal and drops the two-device I²C table. `tiers.md`'s threshold
+table replaces the single IMU constant with the two new ones. `docs/PRODUCT.md`'s three
+motion-sensor claims (§3, §5.3, §8's BOM) corrected. Both new thresholds are marked
+**PROVISIONAL** — physiologically reasoned, not fitted; retuning needs ticket 003's
+disturbed-vs-still captures, which that ticket's scope was extended to collect.
+
+**Two real bugs found and fixed while building this, both worth remembering:**
+
+1. Computing perfusion index by independently re-filtering each 1-second sub-window
+   produced severe filter-edge noise (a 0.5 Hz highpass needs seconds to settle), which
+   made a perfectly *steady* synthetic capture read as **more unstable** (1.67) than the
+   deliberately disturbed one (1.62) — the metric was measuring its own filtering
+   artifact, not motion. Fixed by filtering the whole capture once, then windowing the
+   already-filtered signal, in both `ppg.dart` and its Python mirror.
+2. The first version of the disturbed-vs-steady test reused a pulse train with `synth_ecg`'s
+   own natural start/end dead zones; splitting it into two halves compounded those gaps
+   into spurious instability unrelated to the injected disturbance. Fixed by building a
+   dedicated, fully-covering pulse train for this one test.
+
+Verified: 5/5 Python validators green (dsp 30, policy 24, **ppg 28** [7 new], history 26,
+record all), 40/40 server tests unaffected. Dart itself remains unverified by a Dart SDK.
+
+Pushed as `6e3381c` on `main`.

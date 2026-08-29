@@ -11,5 +11,6 @@
 otherwise (`ppg.md` §4), and with the IMU gone the PPG now carries motion detection too,
 so its timing matters more than it used to.
 
-Blocked by: 003 (Prove the AD8232), 001 (Toolchain bring-up — for PlatformIO),
-006 (Inferred motion gate — settles the BLE status-frame layout before it's flashed).
+Blocked by: 003 (Prove the AD8232), 001 (Toolchain bring-up — for PlatformIO).
+~~006 (Inferred motion gate)~~ — closed; the 4-byte status frame in `contracts/ble.md`
+§4 is now settled and ready to implement against.
