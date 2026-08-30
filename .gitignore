@@ -29,3 +29,9 @@ Thumbs.db
 # Editor
 .vscode/
 .idea/
+
+# AI-agent workflow files — internal working notes for Claude Code, not
+# product code. Kept locally (CLAUDE.md actively drives Claude Code's
+# behavior in this repo) but deliberately excluded from the public repo.
+CLAUDE.md
+.wayfinder/
