@@ -10,7 +10,10 @@
   "scripts": {
     "start": "node src/server.js",
     "test": "node --test \"test/**/*.test.js\"",
-    "export:snowflake": "node scripts/export_to_snowflake.js"
+    "export:snowflake": "node --env-file=.env scripts/export_to_snowflake.js",
+    "seed:demo": "node --env-file=.env scripts/seed_synthetic.js",
+    "seed:demo:clear": "node --env-file=.env scripts/seed_synthetic.js --clear",
+    "verify:tracks": "node --env-file=.env scripts/verify_tracks.js"
   },
   "dependencies": {
     "ajv": "^8.17.1",

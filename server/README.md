@@ -100,6 +100,46 @@ Exports 12 fields only — `recordId`, `patientPseudoId`, `phcId`, `capturedAt`,
 (contracts/analytics.md §2). No new PII risk: `patientPseudoId` is already a salted,
 on-device hash before it reaches Mongo.
 
+## Demo dataset (MongoDB + Snowflake)
+
+A synthetic dataset for showing the two data tracks end to end. Needs `server/.env`
+with `MONGO_URI` and the `SNOWFLAKE_*` variables (never committed).
+
+```bash
+npm run seed:demo           # 360 synthetic screenings -> MongoDB Atlas
+npm run export:snowflake    # MongoDB -> Snowflake (merge on record_id)
+npm run verify:tracks       # read BOTH back and print them side by side
+npm run seed:demo:clear     # remove every row it wrote from MongoDB
+```
+
+**Every row is fabricated and says so.** Records are tagged `phcId='phc-demo'`,
+`villageCode='TN-DEMO-*'` and `patientPseudoId='SYN-*'` — all three reach Snowflake, so
+demo rows are identifiable and deletable in both systems. `record.schema.json` sets
+`additionalProperties: false`, so a `synthetic: true` field would mean changing a locked
+contract; tagging through exported values does the same job without one.
+
+Two properties worth knowing:
+
+- **Validated before it is written.** Every generated record goes through the same
+  `checkRecord()` the upload route uses. A demo dataset that could not have come from a
+  real handset would prove the pipeline accepts things it should not — and this caught a
+  real generator bug (an out-of-range `ppgIrregularityScore`) on the first run.
+- **Deterministic.** A seeded PRNG produces the same `recordId`s every run, so re-running
+  upserts rather than duplicating, and the same figures come back each time.
+
+The flag rate (~⅓ of scored windows) is not a flattering invention: it is what
+`ml/artifacts/evaluation.json`'s measured Se 0.952 / Sp 0.706 produces at 5.1% field
+prevalence. Seeding a prettier number would misrepresent the shipped operating point.
+
+`--clear` deliberately does not touch Snowflake. The matching statement is printed when
+you run it:
+
+```sql
+DELETE FROM screenings WHERE phc_id = 'phc-demo';
+```
+
+Nothing derived from this dataset is a measurement (CLAUDE.md non-negotiable 8).
+
 ## Known gaps
 
 - **Dashboard endpoints are unauthenticated.** Fine on a PHC's internal network,
