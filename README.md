@@ -503,7 +503,7 @@ python ml/evaluate.py
 |---|---|
 | [`docs/FEATURES.md`](docs/FEATURES.md) | Every feature, by component, checked against code |
 | [`docs/PRODUCT.md`](docs/PRODUCT.md) | The product and clinical concept |
-| [`CLAUDE.md`](CLAUDE.md) | Architecture, key decisions, and every gotcha that has cost hours |
+| `CLAUDE.md` *(internal, not in this repo)* | Architecture, key decisions, and every gotcha that has cost hours |
 | [`contracts/`](contracts/) | Locked interface contracts — BLE, record schema, tiers, model I/O, PPG, sync, analytics |
 | [`server/README.md`](server/README.md) | Sync service, endpoints, demo dataset, known gaps |
 

@@ -1,7 +1,7 @@
 # ArogyaX — Features
 
 What the system actually does, by component. For the clinical pitch see
-[PRODUCT.md](PRODUCT.md); for architecture and gotchas see [../CLAUDE.md](../CLAUDE.md).
+[PRODUCT.md](PRODUCT.md); architecture and gotchas live in this project's internal CLAUDE.md notes.
 Status tags reflect the repo as of 2026-08-30 — checked against code, not aspirational.
 
 ---

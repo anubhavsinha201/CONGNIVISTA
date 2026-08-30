@@ -5,7 +5,7 @@
 Team CONGNIVISTA · NIT Trichy · Healthcare
 
 > This is the product/concept document (problem, solution, fit, impact, deployment).
-> For the engineering build spec, see [`../CLAUDE.md`](../CLAUDE.md).
+> The engineering build spec lives in this project's internal CLAUDE.md notes.
 
 ---
 
