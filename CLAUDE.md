@@ -96,7 +96,8 @@ cd app && flutter run
 # Needs a JDK 17 on JAVA_HOME. Android Studio's bundled jbr is 25, which Gradle 8.9
 # rejects with a bare "What went wrong: 25.0.2" — see Gotchas.
 export JAVA_HOME="/c/Program Files/Eclipse Adoptium/jdk-17.0.20.101-hotspot"
-cd android && ./gradlew test                      # both variants, 71 tests each (1 @Ignore'd)
+cd android && ./gradlew test                      # both variants, 150 tests each
+cd android && ./gradlew assembleDebug             # the APK
 cd android && ./gradlew testDebugUnitTest         # debug only, faster
 cd android && ./gradlew installDebug
 
@@ -147,13 +148,13 @@ Only mark something built after checking — several directories are still empty
 | `ml/` | **Built.** Preprocessing, training, INT8 calibration, evaluation, Python reference. |
 | `app/assets/models/af_int8.tflite` | **Shipped.** seed 0, calibrated. Still the right model file for the Kotlin port to load. |
 | `app/lib/data/` | **Superseded, kept as the port reference.** Offline queue (SQLCipher), pseudo-ID, sync engine, scheduler — same status as `app/lib/signal/` above. |
-| `android/` | **Under active port.** Gradle 8.9 + wrapper committed; `./gradlew test` runs 71 tests (70 passing + 1 correctly `@Ignore`d live-server test) green from a bare shell. Signal chain, PPG/fusion, record/patient history, sync engine + client, and audio playback wiring all ported — ticket 019. |
+| `android/` | **App builds and runs, live end to end.** `./gradlew assembleDebug` produces an installable APK; `./gradlew test` runs 150 tests green from a bare shell. Signal chain, PPG/fusion, record/patient history, sync engine + client, audio wiring, `Policy.decide()`, risk engine, ECG quality, adaptive repeat, assistant, live BLE capture (`BleEcgSource` + `EcgFrameParser`), AES-256-GCM on-device storage (`EncryptedStore`), and the full 8-screen worker-facing UI in Tamil-Nadu government styling — ticket 019. UI is framework Views, not Compose: see Gotchas. |
 | `server/` | **Built and tested.** 49 passing tests plus a live end-to-end run. MongoDB sync service — see [server/README.md](server/README.md). |
 | `server/scripts/export_to_snowflake.js` | **Full pipeline proven live.** Ran for real against both systems: pulled an actual record from MongoDB Atlas and merged it into the live Snowflake trial account, verified by reading the same `record_id` back from both `screenings` and the `district_tier_trends` rollup. Ticket 018, [contracts/analytics.md](contracts/analytics.md). Additive: reads MongoDB, writes Snowflake, touches nothing else. |
 | `dashboard/` | **Built.** Static referral queue + risk map, no CDN. |
 | `firmware/` | **Compiled, flashed, and boot-verified on real hardware** — ticket 013. Build output in `firmware/.pio/` (gitignored). |
 | `app/assets/replay/` | **Empty**, and superseded — the trace `ReplaySource` actually plays now lives at `android/app/src/main/assets/replay/`. |
-| App UI, BLE, Tamil strings | **Not written.** (`SignalSource` is written — Kotlin, with a replay trace.) |
+| Server-side sync of on-device records | **Not wired.** Records encrypt and persist on-device (`EncryptedStore`, AES-256-GCM); pushing them to the MongoDB sync service from the app is not yet connected — `SyncEngine`/`SyncClient` exist and are tested, but `MainActivity` does not call them. |
 
 The DSP and decision layer deliberately depend on nothing beyond `dart:math` and
 `dart:typed_data`, so they compile and their tests run with no device, no Bluetooth stack
@@ -255,6 +256,12 @@ dataset and no labelled disturbed-vs-still captures exist in this build.
   positive fraction. If you translate a `.floor()` whose input can go negative, use
   `floor(x).toInt()`, and add a golden-vector case that actually exercises the negative
   branch, because none of the existing fixtures would catch it.
+- **The app UI is plain framework Views, and that is deliberate.** Compose was tried and
+  reverted: `dl.google.com` serves this network at ~16 KB/s, so the ~50 MB of Compose AARs
+  could not be fetched (`checkDebugAarMetadata` hung, then failed on read timeouts). The
+  module's only dependency is still `org.json`, so `assembleDebug` works with no network at
+  all — which matches what the signal layer already does and what the product claims. If you
+  add Compose later, budget the download and keep the decision layer dependency-free.
 - **Gradle 8.9 will not run on Android Studio's bundled JBR 25.** It fails with the
   near-useless `What went wrong: 25.0.2`. Point `JAVA_HOME` at a JDK 17 (Temurin
   `jdk-17.0.20.101-hotspot` is installed) — 17 is also what `build.gradle.kts` targets.
