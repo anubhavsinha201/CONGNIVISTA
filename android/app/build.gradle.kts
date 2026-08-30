@@ -9,7 +9,14 @@ android {
 
     defaultConfig {
         applicationId = "com.arogyax.app"
-        minSdk = 24
+        // 26, not 24: the data layer is built on java.time (OffsetDateTime,
+        // DateTimeFormatter, ChronoUnit), which the platform only provides from
+        // API 26. On 24/25 the app would install and then die with
+        // NoClassDefFoundError the first time it timestamped a screening.
+        // The alternative is core-library desugaring, which needs
+        // desugar_jdk_libs downloaded - and this module deliberately has no
+        // dependency that requires a network to build. API 26 is Android 8.0.
+        minSdk = 26
         targetSdk = 34
         versionCode = 1
         versionName = "0.1.0"
@@ -39,6 +46,7 @@ dependencies {
     // runnable in a plain JVM unit test, where Android's org.json is a stub
     // that throws "not mocked".
     implementation("org.json:json:20240303")
+
     testImplementation("junit:junit:4.13.2")
 }
 

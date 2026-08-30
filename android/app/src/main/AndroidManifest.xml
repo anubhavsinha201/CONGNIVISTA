@@ -1,11 +1,43 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- BLE. Android 12+ split these out of the location permission; older
+         releases still gate a BLE scan behind ACCESS_FINE_LOCATION, so both
+         sets are declared and each older one is bounded by maxSdkVersion, so a
+         modern phone is never asked for location just to read an ECG. -->
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"
+        android:maxSdkVersion="30" />
+
+    <!-- Required, not optional: without a BLE radio there is no sensor unit. -->
+    <uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />
+
+    <!-- No INTERNET permission. Offline is the product, not a mode (CLAUDE.md
+         non-negotiable 4): a screening completes with the radio off, and the
+         sync leg will have to add this line deliberately and visibly rather
+         than finding it already present. -->
+
     <application
         android:label="ArogyaX"
-        android:allowBackup="false">
-        <!-- No activity yet - UI is ticket 010, not started. This manifest exists
-             so the signal-chain port (ticket 019) has somewhere to compile and
-             unit-test against, same role app/lib/*.dart played with no Dart SDK. -->
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:allowBackup="false"
+        android:supportsRtl="true"
+        android:theme="@android:style/Theme.Material.Light.NoActionBar">
+
+        <activity
+            android:name="com.arogyax.ui.MainActivity"
+            android:exported="true"
+            android:screenOrientation="portrait"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
     </application>
 
 </manifest>

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A single ECG complex: baseline, P, the QRS spike, T.
+
+     Deliberately not an emblem, seal, or any real institution's mark. The app
+     is styled in government visual language but does not claim to be an
+     official product of any department, so its icon says what it measures
+     rather than who it belongs to.
+
+     Adaptive-icon geometry: 108x108dp with the outer 18dp trimmed by the
+     system mask, so everything meaningful stays inside the centre 72dp. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <path
+        android:pathData="M22,54 L38,54 L43,54 L46,47 L50,54 L54,30 L60,74 L65,54 L69,54 L72,48 L76,54 L86,54"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="4.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
+
+    <!-- Saffron tick on the R peak: the beat the whole product is about. -->
+    <path
+        android:pathData="M60,74 L60,80"
+        android:strokeColor="#FF9933"
+        android:strokeWidth="4.5"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000" />
+</vector>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Same navy as Gov.NAVY in ui/Gov.kt. Two copies is one too many, but a
+         launcher icon is resolved by the system before any Kotlin runs, so it
+         cannot read the constant. Change both together. -->
+    <color name="ic_launcher_background">#0B2E5C</color>
+</resources>
