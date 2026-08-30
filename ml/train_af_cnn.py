@@ -24,10 +24,10 @@ import os
 import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-DATA = os.path.join(HERE, "data", "cinc2017_250hz.npz")
-ARTIFACTS = os.path.join(HERE, "artifacts")
+DATA = os.path.join(HERE, "data", "cinc2017_250hz.npz") #dataset used for ECG Signals
+ARTIFACTS = os.path.join(HERE, "artifacts") #trained weights, tflite exports, calibration/eval json
 
-WINDOW = 7500
+WINDOW = 7500 #30s of 250Hz results in a 7500 discrete Window
 
 
 def build_model(seed: int):
@@ -41,9 +41,9 @@ def build_model(seed: int):
     # model that tops a leaderboard. Strided convs do the early downsampling so a
     # 7500-sample input reaches the classifier head cheaply.
     inp = layers.Input(shape=(WINDOW, 1), name="ecg")
-    x = inp
+    x = inp #Window of the model because it's a 1D CNN model
     for filters, kernel, stride in [
-        (16, 7, 2),
+        (16, 7, 2), #(filters, kernel, stride)
         (32, 5, 2),
         (64, 5, 2),
         (64, 3, 2),
@@ -51,7 +51,7 @@ def build_model(seed: int):
     ]:
         x = layers.Conv1D(filters, kernel, strides=stride, padding="same",
                           use_bias=False)(x)
-        x = layers.BatchNormalization()(x)
+        x = layers.BatchNormalization()(x) #normalises BEFORE the activation - order here is Conv -> BN -> ReLU
         x = layers.ReLU()(x)
         x = layers.MaxPooling1D(2)(x)
 

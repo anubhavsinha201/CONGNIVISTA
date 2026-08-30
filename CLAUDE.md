@@ -68,14 +68,15 @@ implementations are pinned to each other, and the pair is pinned to scipy and to
 truth.
 
 **If you change a DSP constant, change it in both, then regenerate the vectors.** The
-tests fail loudly when they drift — that is the point. Three suites must stay green:
+tests fail loudly when they drift — that is the point. Five suites must stay green:
 
 | Suite | Covers |
 |---|---|
 | `ml/reference/validate_dsp.py` | filters, Pan–Tompkins, RR features, SQI |
 | `ml/reference/validate_policy.py` | the tier decision table and gate ordering |
 | `ml/reference/validate_ppg.py` | PPG peaks, perfusion index, ECG/PPG fusion |
-| `ml/reference/validate_record.py` | record schema v2, pseudo-ID, sync state machine, backoff |
+| `ml/reference/validate_record.py` | record schema v4, pseudo-ID, sync state machine, backoff |
+| `ml/reference/validate_history.py` | repeat-visit history, clinician outcomes, which records train the model |
 
 ---
 
@@ -91,9 +92,13 @@ cd app && flutter test test/policy_test.dart    # one file
 cd app && flutter test --plain-name "irregular, normal rate, first time -> YELLOW"   # one test
 cd app && flutter run
 
-# --- Kotlin/Android app [current target, ticket 019 - fill in once the project scaffold exists] ---
-# cd android && ./gradlew test
-# cd android && ./gradlew installDebug
+# --- Kotlin/Android app [current target, ticket 019] ---
+# Needs a JDK 17 on JAVA_HOME. Android Studio's bundled jbr is 25, which Gradle 8.9
+# rejects with a bare "What went wrong: 25.0.2" — see Gotchas.
+export JAVA_HOME="/c/Program Files/Eclipse Adoptium/jdk-17.0.20.101-hotspot"
+cd android && ./gradlew test                      # both variants, 71 tests each (1 @Ignore'd)
+cd android && ./gradlew testDebugUnitTest         # debug only, faster
+cd android && ./gradlew installDebug
 
 # --- ML pipeline ---
 # MUST source wsl_env.sh, not the venv directly. See Gotchas.
@@ -108,10 +113,11 @@ python ml/reference/validate_dsp.py    # also regenerates the golden vectors
 python ml/reference/validate_policy.py
 python ml/reference/validate_ppg.py
 python ml/reference/validate_record.py
+python ml/reference/validate_history.py
 
 # --- Sync service + PHC dashboard ---
 cd server && npm install
-cd server && npm test                  # 47 tests, no database required
+cd server && npm test                  # 49 tests, no database required
 cd server && DEMO=1 npm start          # in-memory, nothing to install
 cd server && docker compose up -d && npm start        # against local MongoDB
 cd server && MONGO_URI="mongodb+srv://..." npm start  # against Atlas
@@ -141,13 +147,13 @@ Only mark something built after checking — several directories are still empty
 | `ml/` | **Built.** Preprocessing, training, INT8 calibration, evaluation, Python reference. |
 | `app/assets/models/af_int8.tflite` | **Shipped.** seed 0, calibrated. Still the right model file for the Kotlin port to load. |
 | `app/lib/data/` | **Superseded, kept as the port reference.** Offline queue (SQLCipher), pseudo-ID, sync engine, scheduler — same status as `app/lib/signal/` above. |
-| `android/` | **Not yet scaffolded.** Toolchain (Android Studio) installing as of 2026-08-30 — ticket 019. |
-| `server/` | **Built and tested.** 47 passing tests plus a live end-to-end run. MongoDB sync service — see [server/README.md](server/README.md). |
-| `server/scripts/export_to_snowflake.js` | **Code written, unit-tested against a fake connection — not yet run against the live account.** Ticket 018, [contracts/analytics.md](contracts/analytics.md). Additive: reads MongoDB, writes Snowflake, touches nothing else. |
+| `android/` | **Under active port.** Gradle 8.9 + wrapper committed; `./gradlew test` runs 71 tests (70 passing + 1 correctly `@Ignore`d live-server test) green from a bare shell. Signal chain, PPG/fusion, record/patient history, sync engine + client, and audio playback wiring all ported — ticket 019. |
+| `server/` | **Built and tested.** 49 passing tests plus a live end-to-end run. MongoDB sync service — see [server/README.md](server/README.md). |
+| `server/scripts/export_to_snowflake.js` | **Full pipeline proven live.** Ran for real against both systems: pulled an actual record from MongoDB Atlas and merged it into the live Snowflake trial account, verified by reading the same `record_id` back from both `screenings` and the `district_tier_trends` rollup. Ticket 018, [contracts/analytics.md](contracts/analytics.md). Additive: reads MongoDB, writes Snowflake, touches nothing else. |
 | `dashboard/` | **Built.** Static referral queue + risk map, no CDN. |
-| `firmware/` | **Drafted, never compiled.** No PlatformIO in this environment — see ticket 013. |
-| `app/assets/replay/` | **Empty** — no replay traces yet, so `ReplaySource` has nothing to play. |
-| App UI, BLE, `SignalSource`, Tamil strings | **Not written.** |
+| `firmware/` | **Compiled, flashed, and boot-verified on real hardware** — ticket 013. Build output in `firmware/.pio/` (gitignored). |
+| `app/assets/replay/` | **Empty**, and superseded — the trace `ReplaySource` actually plays now lives at `android/app/src/main/assets/replay/`. |
+| App UI, BLE, Tamil strings | **Not written.** (`SignalSource` is written — Kotlin, with a replay trace.) |
 
 The DSP and decision layer deliberately depend on nothing beyond `dart:math` and
 `dart:typed_data`, so they compile and their tests run with no device, no Bluetooth stack
@@ -237,6 +243,25 @@ dataset and no labelled disturbed-vs-still captures exist in this build.
   One finding, two expressions. Never present them as corroborating each other.
 - **Windows/OneDrive: `claude.md` and `CLAUDE.md` are the same file.** The product doc
   lives at `docs/PRODUCT.md` for this reason.
+- **A golden-vector fixture is not automatically a Gradle input.** The Kotlin tests read
+  `app/test/fixtures/*.json` through a relative `File()` path that reaches outside the
+  module, which Gradle cannot see. Before this was declared in `app/build.gradle.kts`,
+  regenerating the vectors left `:app:test` **UP-TO-DATE** — a deliberately corrupted
+  fixture still produced `BUILD SUCCESSFUL`, because the suite never ran. If you add a
+  test that reads a fixture from a new location, add it to that `inputs.dir` too.
+- **Dart `.floor()` is not Kotlin `.toInt()`.** `.floor()` rounds toward negative
+  infinity; `.toInt()` truncates toward zero. Every current port site (5 of them) is
+  correct only because its operand is provably non-negative — array lengths times a
+  positive fraction. If you translate a `.floor()` whose input can go negative, use
+  `floor(x).toInt()`, and add a golden-vector case that actually exercises the negative
+  branch, because none of the existing fixtures would catch it.
+- **Gradle 8.9 will not run on Android Studio's bundled JBR 25.** It fails with the
+  near-useless `What went wrong: 25.0.2`. Point `JAVA_HOME` at a JDK 17 (Temurin
+  `jdk-17.0.20.101-hotspot` is installed) — 17 is also what `build.gradle.kts` targets.
+- **OneDrive locks files under `android/app/build/`,** so Gradle intermittently dies with
+  `Unable to delete directory ...	est-results	estReleaseUnitTestinary`. It is not a
+  test failure. `rm -rf` that directory and re-run, or exclude `build/` from OneDrive sync.
+  `.gitignore` keeps it out of git; nothing keeps it out of OneDrive.
 
 ---
 

@@ -35,12 +35,40 @@ export function authMiddleware(repo) {
   };
 }
 
-export function buildApp({ repo, service, dashboardOrigin = '*' }) {
+/**
+ * Origins allowed to call this server from a browser.
+ *
+ * The dashboard endpoints below are unauthenticated (see README "Known gaps"),
+ * which is defensible on a PHC LAN. `Access-Control-Allow-Origin: *` is not: it
+ * turns "reachable from the clinic network" into "reachable from any page anyone
+ * on that network happens to open", and `POST /v1/acks` is a write. The two are
+ * only safe together if the origin is actually constrained, so the default is the
+ * dashboard's own dev origin rather than a wildcard.
+ *
+ * Set DASHBOARD_ORIGIN to the real dashboard origin in a deployment. '*' still
+ * works, but now only when someone has typed it.
+ */
+export const DEFAULT_DASHBOARD_ORIGINS = [
+  'http://localhost:8080',
+  'http://127.0.0.1:8080',
+];
+
+export function buildApp({ repo, service, dashboardOrigin = DEFAULT_DASHBOARD_ORIGINS }) {
   const app = express();
   app.use(express.json({ limit: '2mb' }));
 
+  const allowed = Array.isArray(dashboardOrigin) ? dashboardOrigin : [dashboardOrigin];
+  const allowAny = allowed.includes('*');
+
   app.use((req, res, next) => {
-    res.set('Access-Control-Allow-Origin', dashboardOrigin);
+    const origin = req.get('origin');
+    if (allowAny) {
+      res.set('Access-Control-Allow-Origin', '*');
+    } else if (origin && allowed.includes(origin)) {
+      res.set('Access-Control-Allow-Origin', origin);
+      // The response varies by Origin now, so it must not be cached under one key.
+      res.set('Vary', 'Origin');
+    }
     res.set('Access-Control-Allow-Headers', 'Authorization, Content-Type');
     res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     if (req.method === 'OPTIONS') return res.sendStatus(204);

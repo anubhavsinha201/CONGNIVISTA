@@ -124,8 +124,16 @@ tune them, and so the demo cannot drift from this document.
 | `kMotionWanderRatioGate` | 0.35 (PROVISIONAL) | Inferred from ECG baseline wander — the MPU-6050 is no longer in the BOM |
 | `kMotionPerfusionInstabilityGate` | 1.0 (PROVISIONAL) | Corroborated by PPG perfusion instability when a simultaneous capture exists |
 | `kRrIrregularityGate` | 0.5 | C, tuned against MIT-BIH AFDB |
-| `kCnnThresholdInt8` | TBD by D | **Refitted on INT8 scores**, never inherited from FP32 |
+| `kCnnThresholdInt8` | 0.1875 | **Refitted on INT8 scores**, never inherited from FP32 |
 | `kHrLow` / `kHrHigh` | 50 / 120 | Fixed |
+| `kPulseDeficitBpm` | 10 (PROVISIONAL) | Unfitted — no paired ECG+PPG AF dataset exists in this build |
+| `kPerfusedBeatFractionLow` | 0.90 (PROVISIONAL) | Unfitted — same reason |
 
 `kCnnThresholdInt8` is the whole differentiator (PRODUCT.md §6). It is filled in from
-`ml/notebooks/quantization_calibration.ipynb` and nowhere else.
+`ml/calibrate_threshold.py` and nowhere else, which writes it to
+`ml/artifacts/calibration_summary.json`; `ml/evaluate.py` carries the same literal and the
+two must be changed together. (Earlier revisions of this contract named
+`ml/notebooks/quantization_calibration.ipynb`; no such notebook was ever committed.)
+
+The last two rows are decision-affecting — they are what lets PPG escalate a tier under §7
+of `contracts/ppg.md` — so they belong in this table even while provisional.

@@ -189,4 +189,26 @@ describe('round trip', () => {
     const res = await fetch(`${base}/healthz`);
     assert.equal(res.status, 200);
   });
+
+  // The dashboard endpoints are unauthenticated by design, so the CORS origin is
+  // the only thing standing between them and any page a clinic browser opens.
+  // POST /v1/acks is a write, which is what makes a wildcard here a real problem.
+  test('an unlisted origin gets no CORS grant', async () => {
+    const res = await fetch(`${base}/v1/queue`, {
+      headers: { Origin: 'https://evil.example' },
+    });
+    assert.equal(
+      res.headers.get('access-control-allow-origin'),
+      null,
+      'an arbitrary site must not be handed the referral queue',
+    );
+  });
+
+  test('the dashboard origin is echoed back, and varies on Origin', async () => {
+    const res = await fetch(`${base}/v1/queue`, {
+      headers: { Origin: 'http://localhost:8080' },
+    });
+    assert.equal(res.headers.get('access-control-allow-origin'), 'http://localhost:8080');
+    assert.equal(res.headers.get('vary'), 'Origin');
+  });
 });

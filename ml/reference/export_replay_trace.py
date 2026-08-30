@@ -25,14 +25,31 @@ Run:  python ml/reference/export_replay_trace.py
 from __future__ import annotations
 
 import os
+import sys
 
 import numpy as np
 from scipy.io import loadmat
 from scipy.signal import resample_poly
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import dsp_reference as dsp  # noqa: E402
+
 SRC_FS = 300
 DST_FS = 250
-RECORD = "A00004"  # CinC 2017 training2017, REFERENCE.csv label 'A' (AF), 30 s
+RECORD = "A02501"  # CinC 2017 training2017, REFERENCE.csv label 'A' (AF)
+WINDOW = 7500      # exactly 30 s at 250 Hz - one analysis window, what the app scores
+
+# Gates this trace has to clear to be usable as a demo, from contracts/tiers.md
+# section 4. Asserted below with MARGIN, not merely cleared: record A00004 shipped
+# first and produced exactly 30 RR intervals against a >= 30 gate, so a single
+# missed R peak on stage would have turned the flagship AF demo into a RETAKE.
+# Clearing a gate by nothing is not clearing it.
+K_MIN_RR_INTERVALS = 30
+K_SQI_GATE = 0.5
+K_RR_IRREGULARITY_GATE = 0.5
+K_HR_LOW, K_HR_HIGH = 50.0, 120.0
+MIN_MARGIN = 0.25  # every gate must be cleared by at least this fraction
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DATA_ROOT = os.path.join(HERE, "..", "data", "training2017", "training2017")
@@ -62,7 +79,41 @@ def main() -> None:
         f"SqiAnalyser's rail threshold ({rail}) - pick a different record or scale it"
     )
 
+    resampled = resampled[:WINDOW]
+    assert resampled.size == WINDOW, (
+        f"{RECORD} yields only {resampled.size} samples at {DST_FS} Hz; "
+        f"{WINDOW} ({WINDOW / DST_FS:.0f} s) are needed for one analysis window"
+    )
+
     samples_int16 = np.round(resampled).astype(np.int16)
+
+    # ---- the trace must clear every gate with room to spare -----------------
+    # Run the app's own verified chain over the exact int16 the asset will hold,
+    # so these numbers are what the device will actually compute, not an
+    # approximation of it.
+    check = samples_int16.astype(np.float64)
+    sqi = dsp.analyse_sqi(check)
+    peaks = np.asarray(dsp.detect_rpeaks(check, float(DST_FS))[0])
+    feats = dsp.analyse_rr(np.diff(peaks) * 1000.0 / DST_FS)
+
+    margins = {
+        "rrIntervalCount": (feats.count - K_MIN_RR_INTERVALS) / K_MIN_RR_INTERVALS,
+        "sqiScore": (sqi["score"] - K_SQI_GATE) / K_SQI_GATE,
+        "rrIrregularityScore":
+            (feats.irregularityScore - K_RR_IRREGULARITY_GATE) / K_RR_IRREGULARITY_GATE,
+        "meanHr above kHrLow": (feats.meanHr - K_HR_LOW) / (K_HR_HIGH - K_HR_LOW),
+        "meanHr below kHrHigh": (K_HR_HIGH - feats.meanHr) / (K_HR_HIGH - K_HR_LOW),
+    }
+    print(f"measured: {feats.count} RR intervals, SQI {sqi['score']:.4f}, "
+          f"irregularity {feats.irregularityScore:.4f}, mean HR {feats.meanHr:.1f} bpm")
+    for name, m in margins.items():
+        print(f"  margin over {name:24} {m:+.1%}")
+    worst = min(margins, key=margins.get)
+    assert margins[worst] >= MIN_MARGIN, (
+        f"{RECORD} clears '{worst}' by only {margins[worst]:.1%} "
+        f"(need >= {MIN_MARGIN:.0%}) - pick a record with more headroom"
+    )
+
     os.makedirs(OUT_DIR, exist_ok=True)
     out_path = os.path.join(OUT_DIR, f"af_{RECORD}_250hz.raw")
     samples_int16.tofile(out_path)

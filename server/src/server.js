@@ -40,7 +40,11 @@ async function main() {
     );
   }
 
-  const app = buildApp({ repo, service: new SyncService(repo) });
+  // Comma-separated list, or '*' to opt back into the old wildcard behaviour.
+  const dashboardOrigin = process.env.DASHBOARD_ORIGIN
+    ? process.env.DASHBOARD_ORIGIN.split(',').map((o) => o.trim()).filter(Boolean)
+    : undefined;
+  const app = buildApp({ repo, service: new SyncService(repo), dashboardOrigin });
 
   const server = app.listen(PORT, () => {
     console.log(

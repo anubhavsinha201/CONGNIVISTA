@@ -106,6 +106,12 @@ on-device hash before it reaches Mongo.
   not fine on the open internet. `GET /v1/queue` exposes pseudonymised records
   and `POST /v1/acks` is an unauthenticated write. Put this behind PHC staff
   auth before it leaves a LAN.
+  Until then the CORS origin is the only thing narrowing that exposure, so it is
+  no longer a wildcard: allowed origins default to `http://localhost:8080` and
+  `http://127.0.0.1:8080` (where `dashboard/` is served) and are overridden with
+  `DASHBOARD_ORIGIN` — comma-separated, or `*` to opt back into the old behaviour.
+  Without this, "reachable on the clinic LAN" also meant "writable by any page
+  anyone on that LAN happened to open".
 - **No rate limiting.** A device token is currently unbounded in request volume.
 - **TLS is terminated by the host.** There is no in-payload encryption; the
   bearer token is only as safe as the transport carrying it.
