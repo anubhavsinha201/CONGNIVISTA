@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ArogyaX — Tamil audio review (ticket 011)</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 900px; margin: 0 auto; padding: 24px 16px 80px; background: #f7f7f5; color: #1a1a1a; }
+  h1 { font-size: 1.3rem; margin-bottom: 4px; }
+  .sub { color: #555; font-size: 0.9rem; margin-bottom: 18px; }
+  .checks { background: #eef6ee; border: 1px solid #bfe0bf; border-radius: 6px; padding: 10px 14px; font-size: 0.85rem; margin-bottom: 20px; }
+  .checks b { color: #256029; }
+  .summary { position: sticky; top: 0; background: #fff; border: 1px solid #ddd; border-radius: 6px; padding: 8px 14px; margin-bottom: 16px; font-size: 0.9rem; display: flex; gap: 16px; align-items: center; z-index: 5; }
+  .summary span.count { font-weight: 600; }
+  .item { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px; }
+  .item.status-ok { border-left: 4px solid #2f9e44; }
+  .item.status-fix { border-left: 4px solid #d9480f; }
+  .item.status-unreviewed { border-left: 4px solid #ced4da; }
+  .key { font-family: ui-monospace, monospace; font-size: 0.78rem; color: #868e96; }
+  .ta { font-size: 1.15rem; margin: 4px 0; line-height: 1.5; }
+  .en { color: #555; font-size: 0.88rem; margin-bottom: 8px; }
+  .clips { font-family: ui-monospace, monospace; font-size: 0.72rem; color: #999; margin: 4px 0 8px; word-break: break-all; }
+  .clips .now { color: #d9480f; font-weight: 700; }
+  .fields { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+  .fields label { font-size: 0.78rem; color: #555; }
+  .fields input { width: 60px; padding: 2px 4px; }
+  .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  button.play { background: #1971c2; color: #fff; border: none; border-radius: 4px; padding: 6px 14px; cursor: pointer; }
+  button.play:hover { background: #1864ab; }
+  select.status { padding: 4px; }
+  textarea.notes { width: 100%; margin-top: 8px; box-sizing: border-box; min-height: 40px; font-family: inherit; font-size: 0.85rem; }
+  #exportBox { width: 100%; min-height: 160px; font-family: ui-monospace, monospace; font-size: 0.78rem; }
+  .presetBtns button { font-size: 0.72rem; padding: 2px 6px; margin-right: 2px; }
+</style>
+</head>
+<body>
+
+<h1>ArogyaX — Tamil audio review</h1>
+<div class="sub">
+  Ticket 011. Every clip below is AI-drafted text (ElevenLabs TTS), never reviewed by a
+  native Tamil speaker or a clinician. This page plays exactly what the app will play —
+  same manifest, same file paths — so what you hear here is what a health worker hears.
+  Serve it with <code>cd android &amp;&amp; python -m http.server 8080</code>, then open
+  <code>http://localhost:8080/scripts/tamil_review.html</code> (a <code>file://</code> URL
+  will not be able to fetch the JSON).
+</div>
+
+<div class="checks">
+  <b>Automated checks (mechanical, not a substitute for review):</b>
+  banned-word scan across all Tamil/English text for "atrial fibrillation" / "AF" /
+  "arrhythmia" (non-negotiable 1) — clean. Asset completeness — 245/245 clips present
+  (38 segments, 201 numbers 0–200, 6 tier clips). Neither check says anything about
+  whether the Tamil is correct, natural, or clinically appropriate — that's what this
+  page is for.
+</div>
+
+<div class="summary">
+  <span>Progress:</span>
+  <span class="count" id="cOk">0</span> OK ·
+  <span class="count" id="cFix">0</span> needs fix ·
+  <span class="count" id="cUn">0</span> not reviewed
+  <button onclick="exportNotes()" style="margin-left:auto">Export notes</button>
+</div>
+
+<textarea id="exportBox" style="display:none"></textarea>
+
+<div id="tierList"></div>
+<h2>Explanation reasons (<code>why.*</code>)</h2>
+<div id="whyList"></div>
+
+<script>
+const AUDIO_BASE = '../app/src/main/assets/audio_DRAFT/';
+const STORAGE_KEY = 'arogyax_tamil_review_v1';
+let state = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+
+function saveState() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+
+function getItemState(key) {
+  return state[key] || { status: 'unreviewed', notes: '' };
+}
+
+function setItemState(key, patch) {
+  state[key] = Object.assign(getItemState(key), patch);
+  saveState();
+  updateSummary();
+}
+
+function updateSummary() {
+  const vals = Object.values(state);
+  document.getElementById('cOk').textContent = vals.filter(v => v.status === 'ok').length;
+  document.getElementById('cFix').textContent = vals.filter(v => v.status === 'fix').length;
+  const total = document.querySelectorAll('.item').length;
+  document.getElementById('cUn').textContent = total - vals.filter(v => v.status && v.status !== 'unreviewed').length;
+}
+
+// Mirrors ExplanationAudio.kt exactly: same paths, same clamping.
+function resolveClips(manifest, key, values) {
+  const steps = manifest.keys[key];
+  if (!steps) throw new Error('no manifest entry for ' + key);
+  const min = manifest.number_range.min, max = manifest.number_range.max;
+  return steps.map(step => {
+    if (step.seg) return 'segments/' + step.seg + '.mp3';
+    const raw = String(values[step.num] ?? '');
+    const digits = raw.replace(/\D/g, '');
+    if (!digits) throw new Error('no numeric value for {' + step.num + '}');
+    const n = Math.min(max, Math.max(min, parseInt(digits, 10)));
+    return 'numbers/' + n + '.mp3';
+  });
+}
+
+function fieldsFor(manifest, key) {
+  const steps = manifest.keys[key] || [];
+  const seen = [];
+  for (const s of steps) if (s.num && !seen.includes(s.num)) seen.push(s.num);
+  return seen;
+}
+
+// Plays a list of clip paths back-to-back, highlighting the one currently playing.
+function playSequence(basePath, paths, onStep) {
+  let i = 0;
+  const audio = new Audio();
+  function next() {
+    if (i >= paths.length) { onStep(-1); return; }
+    onStep(i);
+    audio.src = basePath + paths[i];
+    audio.play().catch(() => { i++; next(); });
+  }
+  audio.onended = () => { i++; next(); };
+  audio.onerror = () => { i++; next(); };
+  next();
+}
+
+function itemCard(key, ta, en, playFn, fields) {
+  const st = getItemState(key);
+  const div = document.createElement('div');
+  div.className = 'item status-' + st.status;
+  div.id = 'item-' + key;
+
+  const fieldInputs = (fields || []).map(f =>
+    `<label>${f}: <input type="number" min="0" max="200" value="42" data-field="${f}"></label>`
+  ).join('');
+
+  const presets = (fields || []).length
+    ? `<span class="presetBtns">try:
+        <button type="button" data-v="0">0</button>
+        <button type="button" data-v="1">1</button>
+        <button type="button" data-v="48">48</button>
+        <button type="button" data-v="99">99</button>
+        <button type="button" data-v="200">200</button>
+       </span>`
+    : '';
+
+  div.innerHTML = `
+    <div class="key">${key}</div>
+    <div class="ta">${ta}</div>
+    <div class="en">${en}</div>
+    <div class="clips" id="clips-${key}"></div>
+    <div class="fields">${fieldInputs}${presets}</div>
+    <div class="row">
+      <button class="play">▶ Play</button>
+      <select class="status">
+        <option value="unreviewed">Not reviewed</option>
+        <option value="ok">OK</option>
+        <option value="fix">Needs fix</option>
+      </select>
+    </div>
+    <textarea class="notes" placeholder="Notes for this string (grammar, pronunciation, seam, tone)...">${st.notes}</textarea>
+  `;
+
+  div.querySelector('.status').value = st.status;
+  div.querySelector('.status').addEventListener('change', e => {
+    setItemState(key, { status: e.target.value });
+    div.className = 'item status-' + e.target.value;
+  });
+  div.querySelector('.notes').addEventListener('input', e => setItemState(key, { notes: e.target.value }));
+  div.querySelectorAll('.presetBtns button').forEach(b => b.addEventListener('click', () => {
+    div.querySelectorAll('[data-field]').forEach(inp => inp.value = b.dataset.v);
+  }));
+  div.querySelector('button.play').addEventListener('click', () => {
+    const values = {};
+    div.querySelectorAll('[data-field]').forEach(inp => values[inp.dataset.field] = inp.value);
+    playFn(values, (paths, activeIdx) => {
+      const el = document.getElementById('clips-' + key);
+      el.innerHTML = paths.map((p, i) => i === activeIdx ? `<span class="now">${p}</span>` : p).join(' &rarr; ');
+    });
+  });
+
+  return div;
+}
+
+async function main() {
+  const [strings, manifest] = await Promise.all([
+    fetch('../app/src/main/assets/strings/tamil_strings_DRAFT.json').then(r => r.json()),
+    fetch('../app/src/main/assets/strings/tamil_audio_manifest_DRAFT.json').then(r => r.json()),
+  ]);
+
+  const tierList = document.getElementById('tierList');
+  const tierHeading = document.createElement('h2');
+  tierHeading.textContent = 'Tier & supporting strings';
+  tierList.appendChild(tierHeading);
+
+  for (const [tier, { ta, en }] of Object.entries(strings.tiers)) {
+    const path = tier + '.mp3';
+    const card = itemCard('tier.' + tier, ta, en, (values, report) => {
+      report([path], 0);
+      const a = new Audio(AUDIO_BASE + path);
+      a.onended = () => report([path], -1);
+      a.play();
+    }, []);
+    tierList.appendChild(card);
+  }
+
+  const whyList = document.getElementById('whyList');
+  for (const [key, { ta, en }] of Object.entries(strings.explanations)) {
+    const fields = fieldsFor(manifest, key);
+    const card = itemCard(key, ta, en, (values, report) => {
+      let paths;
+      try { paths = resolveClips(manifest, key, values); }
+      catch (e) { report(['ERROR: ' + e.message], -1); return; }
+      playSequence(AUDIO_BASE, paths, i => report(paths, i));
+    }, fields);
+    whyList.appendChild(card);
+  }
+
+  updateSummary();
+}
+
+function exportNotes() {
+  const lines = Object.entries(state)
+    .filter(([, v]) => v.status !== 'unreviewed' || v.notes)
+    .map(([k, v]) => `${k}\t${v.status}\t${(v.notes || '').replace(/\n/g, ' ')}`);
+  const box = document.getElementById('exportBox');
+  box.value = 'key\tstatus\tnotes\n' + lines.join('\n');
+  box.style.display = 'block';
+  box.select();
+}
+
+main().catch(e => {
+  document.body.insertAdjacentHTML('afterbegin',
+    `<div style="color:red">Failed to load: ${e.message}. Are you serving this over http (not file://)?</div>`);
+});
+</script>
+</body>
+</html>

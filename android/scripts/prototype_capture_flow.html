@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PROTOTYPE — capture-to-result flow (ticket 010, throwaway)</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, sans-serif; background: #f1f2f4; color: #1a1a1a; min-height: 100vh; }
+  .banner { background: #212529; color: #ffd43b; font-size: 0.72rem; text-align: center; padding: 4px; letter-spacing: 0.03em; }
+  .stage { min-height: calc(100vh - 24px); display: flex; align-items: stretch; justify-content: center; padding: 20px 12px 90px; }
+  .phone { width: 380px; max-width: 100%; background: #fff; border-radius: 18px; box-shadow: 0 4px 24px rgba(0,0,0,0.12); overflow: hidden; display: flex; flex-direction: column; }
+
+  /* scene picker — top strip, separate from the mandated variant switcher */
+  .scenepicker { position: fixed; top: 24px; left: 0; right: 0; display: flex; justify-content: center; gap: 6px; flex-wrap: wrap; z-index: 20; padding: 0 8px; }
+  .scenepicker button, .subpicker button { font-size: 0.68rem; padding: 4px 9px; border-radius: 999px; border: 1px solid #ccc; background: #fff; cursor: pointer; }
+  .scenepicker button.active { background: #1971c2; color: #fff; border-color: #1971c2; }
+  .subpicker { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0; }
+  .subpicker button.active { background: #495057; color: #fff; border-color: #495057; }
+
+  /* mandated floating variant switcher */
+  .switcher { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: #111; color: #fff; border-radius: 999px; padding: 8px 6px 8px 14px; display: flex; align-items: center; gap: 10px; box-shadow: 0 6px 20px rgba(0,0,0,0.35); z-index: 30; font-size: 0.85rem; }
+  .switcher button { background: #333; color: #fff; border: none; width: 30px; height: 30px; border-radius: 50%; cursor: pointer; font-size: 1rem; }
+  .switcher button:hover { background: #444; }
+  .switcher .label { min-width: 210px; text-align: center; }
+
+  .ta { font-size: 1.1rem; line-height: 1.5; }
+  .en { color: #666; font-size: 0.82rem; margin-top: 2px; }
+  .playbtn { border: none; background: #e7f0fb; color: #1864ab; border-radius: 8px; padding: 6px 10px; font-size: 0.8rem; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; }
+  .playbtn:hover { background: #d0e4fb; }
+  .pid { font-family: ui-monospace, monospace; font-size: 0.75rem; color: #555; }
+  .waveform { height: 54px; background: repeating-linear-gradient(90deg, #74c0fc 0 2px, transparent 2px 6px); border-radius: 6px; opacity: 0.8; }
+
+  /* ---------- Variant A: full-screen wizard takeover ---------- */
+  .A .phone { min-height: 640px; justify-content: center; text-align: center; }
+  .A .step { padding: 28px 22px; flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 14px; }
+  .A .tierwash { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 30px 20px; color: #fff; gap: 10px; }
+  .A .bigicon { font-size: 3rem; }
+  .A .timeframe { font-size: 1rem; font-weight: 600; opacity: 0.95; }
+  .A details { margin-top: 14px; text-align: left; background: rgba(255,255,255,0.15); border-radius: 10px; padding: 10px 14px; }
+  .A .primary { background: #1971c2; color: #fff; border: none; border-radius: 12px; padding: 14px; font-size: 1rem; }
+  .A .retakewash { background: #495057; }
+
+  /* ---------- Variant B: persistent status rail / dashboard ---------- */
+  .B .phone { min-height: 640px; }
+  .B .rail { background: #1c2128; color: #cfd4da; padding: 10px 14px; display: flex; justify-content: space-between; font-size: 0.72rem; align-items: center; }
+  .B .rail .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 4px; }
+  .B .body { padding: 16px; flex: 1; display: flex; flex-direction: column; gap: 12px; }
+  .B .card { border: 1px solid #e0e0e0; border-radius: 10px; padding: 14px; }
+  .B .card.retake { border: 2px dashed #868e96; background: #f8f9fa; }
+  .B .badge { display: inline-block; padding: 2px 10px; border-radius: 999px; color: #fff; font-size: 0.75rem; font-weight: 600; }
+  .B ul.reasons { margin: 8px 0 0; padding-left: 18px; font-size: 0.85rem; }
+  .B ul.reasons li { margin-bottom: 6px; }
+
+  /* ---------- Variant C: append-only conversational log ---------- */
+  .C .phone { min-height: 640px; background: #ece5dd; }
+  .C .log { flex: 1; padding: 14px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
+  .C .bubble { background: #fff; border-radius: 10px; padding: 10px 12px; max-width: 88%; box-shadow: 0 1px 1px rgba(0,0,0,0.08); font-size: 0.85rem; }
+  .C .bubble.sys { align-self: center; background: transparent; color: #777; font-size: 0.72rem; box-shadow: none; }
+  .C .bubble.retake { border-left: 4px solid #868e96; }
+  .C .bubble.result { border-left: 4px solid var(--tier, #333); }
+  .C .thread { margin-top: 6px; padding-top: 6px; border-top: 1px dashed #ddd; font-size: 0.78rem; color: #444; }
+</style>
+</head>
+<body>
+<div class="banner">PROTOTYPE — throwaway, ticket 010 — not production UI. Do not wire this to real capture logic.</div>
+
+<div class="scenepicker" id="scenepicker"></div>
+<div class="stage" id="stage"></div>
+<div class="switcher" id="switcher"></div>
+
+<script>
+const TIER_COLOR = { GREEN: '#2f9e44', YELLOW: '#f08c00', ORANGE: '#e8590c', RED: '#e03131' };
+const TIER_ICON  = { GREEN: '✅', YELLOW: '⚠️', ORANGE: '🟠', RED: '🔴' };
+const TIER_TIMEFRAME = { GREEN: 'No action needed today', YELLOW: 'Within 2 days', ORANGE: 'Within 24 hours', RED: 'Within 4 hours' };
+
+const RETAKE_REASONS = ['why.retake.electrode', 'why.retake.motion', 'why.retake.connection'];
+// Each result scenario: tier + which why.* reasons apply + sample substitution values.
+const RESULT_SCENARIOS = {
+  GREEN:  { tier: 'GREEN',  reasons: [['why.rhythm.regular', {score: '18'}], ['why.source.rules', {}]] },
+  YELLOW: { tier: 'YELLOW', reasons: [['why.rhythm.irregular', {score: '62'}], ['why.source.both', {}], ['why.repeat.never_screened', {}]] },
+  ORANGE: { tier: 'ORANGE', reasons: [['why.rhythm.irregular', {score: '58'}], ['why.history.flagRate', {days: '90', total: '4', flagged: '3'}], ['why.repeat.previous_repeated_finding', {}]] },
+  RED:    { tier: 'RED',    reasons: [['why.rate.high', {hr: '138'}], ['why.ppg.pulseDeficit', {deficit: '14'}], ['why.source.both', {}]] },
+};
+
+const AUDIO_BASE = '../app/src/main/assets/audio_DRAFT/';
+let STRINGS = null, MANIFEST = null;
+
+function resolveClips(key, values) {
+  const steps = MANIFEST.keys[key];
+  if (!steps) return [];
+  const { min, max } = MANIFEST.number_range;
+  return steps.map(s => {
+    if (s.seg) return 'segments/' + s.seg + '.mp3';
+    const digits = String(values[s.num] ?? '').replace(/\D/g, '');
+    const n = Math.min(max, Math.max(min, parseInt(digits || '0', 10)));
+    return 'numbers/' + n + '.mp3';
+  });
+}
+function playKey(key, values) {
+  const paths = resolveClips(key, values);
+  let i = 0;
+  const audio = new Audio();
+  (function next() {
+    if (i >= paths.length) return;
+    audio.src = AUDIO_BASE + paths[i];
+    audio.onended = () => { i++; next(); };
+    audio.play().catch(() => { i++; next(); });
+  })();
+}
+function playTier(tier) {
+  new Audio(AUDIO_BASE + tier + '.mp3').play().catch(() => {});
+}
+function playBtn(onClick, label) {
+  const b = document.createElement('button');
+  b.className = 'playbtn';
+  b.innerHTML = '🔊 ' + (label || 'கேளுங்கள்');
+  b.onclick = onClick;
+  return b;
+}
+function el(tag, cls, html) { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; }
+function reasonText(key) {
+  const s = STRINGS.explanations[key];
+  return s || { ta: '(' + key + ')', en: key };
+}
+function fillTemplate(str, values) {
+  return str.replace(/\{(\w+)\}/g, (_, k) => values[k] ?? '?');
+}
+
+// ---------------- SCENES ----------------
+// scene: 'patient' | 'connect' | 'capturing' | 'capturing_interrupt' | 'retake' | 'result'
+let scene = 'patient', retakeReasonIdx = 0, resultTier = 'ORANGE', variant = 'A';
+
+function readParams() {
+  const p = new URLSearchParams(location.search);
+  scene = p.get('scene') || 'patient';
+  variant = p.get('variant') || 'A';
+  resultTier = p.get('tier') || 'ORANGE';
+  retakeReasonIdx = RETAKE_REASONS.indexOf(p.get('reason')) >= 0 ? RETAKE_REASONS.indexOf(p.get('reason')) : 0;
+}
+function writeParams() {
+  const p = new URLSearchParams();
+  p.set('scene', scene); p.set('variant', variant);
+  if (scene === 'result') p.set('tier', resultTier);
+  if (scene === 'retake') p.set('reason', RETAKE_REASONS[retakeReasonIdx]);
+  history.replaceState(null, '', '?' + p.toString());
+}
+
+// ---------------- VARIANT A: full-screen wizard ----------------
+function renderA(root) {
+  const phone = el('div', 'phone');
+  if (scene === 'patient') {
+    const s = el('div', 'step');
+    s.innerHTML = `<div style="font-size:2rem">📋</div>
+      <div class="ta">புதிய நோயாளியா, முன்பே பதிவு செய்யப்பட்டவரா?</div>
+      <div class="en">New patient, or returning?</div>`;
+    const row = el('div'); row.style.cssText = 'display:flex;gap:10px;margin-top:10px';
+    row.appendChild(el('button', 'primary', 'புதியது / New'));
+    const b2 = el('button', 'primary', 'தேடு / Look up ID'); b2.style.background = '#495057';
+    row.appendChild(b2);
+    s.appendChild(row);
+    s.appendChild(el('div', 'pid', 'session pseudoId: TN-VLR-04821 · age 45–54 · Vellore block 3<br>(no name / phone / Aadhaar collected)'));
+    phone.appendChild(s);
+  } else if (scene === 'connect') {
+    const s = el('div', 'step');
+    s.innerHTML = `<div style="font-size:2rem">🔌</div>
+      <div class="ta">சென்சாரை இணைக்கவும்</div><div class="en">Connect the sensor unit</div>
+      <div style="text-align:left;background:#f1f3f5;border-radius:10px;padding:12px;font-size:0.85rem">
+        ✅ Bluetooth paired — ESP32-70:4b:ca<br>
+        ⏳ Lead check: place electrodes, rest finger on sensor</div>`;
+    s.appendChild(el('button', 'primary', 'தயார் — தொடங்கு / Ready — start'));
+    phone.appendChild(s);
+  } else if (scene === 'capturing' || scene === 'capturing_interrupt') {
+    const s = el('div', 'step');
+    s.innerHTML = `<div class="ta">பதிவு செய்யப்படுகிறது…</div><div class="en">Capturing — hold still</div>
+      <div style="font-size:2.4rem;font-weight:700">${scene === 'capturing' ? '00:16' : '00:22'}</div>
+      <div class="waveform"></div>`;
+    if (scene === 'capturing_interrupt') {
+      const warn = el('div', null, '⚠️ அசைவு கண்டறியப்பட்டது — பதிவு நிறுத்தப்படும்<br><span class="en">Motion detected — this capture will be discarded</span>');
+      warn.style.cssText = 'margin-top:14px;background:#fff3bf;border-radius:10px;padding:10px;font-size:0.85rem';
+      s.appendChild(warn);
+    }
+    phone.appendChild(s);
+  } else if (scene === 'retake') {
+    const key = RETAKE_REASONS[retakeReasonIdx];
+    const r = reasonText(key);
+    const w = el('div', 'tierwash retakewash');
+    w.innerHTML = `<div class="bigicon">↻</div><div class="ta">சமிக்ஞை படிக்க முடியவில்லை</div>`;
+    const taLine = el('div', 'ta', fillTemplate(r.ta, {sqi: '38'}));
+    const enLine = el('div', 'en', fillTemplate(r.en, {sqi: '38'}));
+    enLine.style.color = '#e9ecef';
+    w.appendChild(taLine); w.appendChild(enLine);
+    w.appendChild(playBtn(() => playKey(key, {sqi: '38'})));
+    const retryBtn = el('button', 'primary', 'மீண்டும் முயற்சி / Try again');
+    retryBtn.style.marginTop = '18px'; retryBtn.style.width = '100%';
+    w.appendChild(retryBtn);
+    phone.appendChild(w);
+  } else if (scene === 'result') {
+    const sc = RESULT_SCENARIOS[resultTier];
+    const tier = STRINGS.tiers[sc.tier];
+    const w = el('div', 'tierwash'); w.style.background = TIER_COLOR[sc.tier];
+    w.innerHTML = `<div class="bigicon">${TIER_ICON[sc.tier]}</div><div class="timeframe">${TIER_TIMEFRAME[sc.tier]}</div>`;
+    const taLine = el('div', 'ta', tier.ta);
+    const enLine = el('div', 'en', tier.en); enLine.style.color = '#f1f3f5';
+    w.appendChild(taLine); w.appendChild(enLine);
+    w.appendChild(playBtn(() => playTier(sc.tier)));
+    const details = el('details');
+    details.innerHTML = '<summary>ஏன்? / Why?</summary>';
+    sc.reasons.forEach(([key, values]) => {
+      const r = reasonText(key);
+      const line = el('div'); line.style.marginTop = '8px';
+      line.innerHTML = `<div class="ta" style="font-size:0.9rem">${fillTemplate(r.ta, values)}</div><div class="en">${fillTemplate(r.en, values)}</div>`;
+      line.appendChild(playBtn(() => playKey(key, values), ''));
+      details.appendChild(line);
+    });
+    w.appendChild(details);
+    const supp = el('div', 'en', STRINGS.tiers.SUPPORTING_LINE.ta); supp.style.marginTop = '14px'; supp.style.color = '#f8f9fa'; supp.style.fontSize = '0.78rem';
+    w.appendChild(supp);
+    const sync = el('div'); sync.style.cssText = 'margin-top:10px;font-size:0.72rem;background:rgba(255,255,255,0.2);padding:4px 10px;border-radius:999px;display:inline-block';
+    sync.textContent = '📥 ஒத்திசைவுக்காக சேமிக்கப்பட்டது — Queued for sync (offline)';
+    w.appendChild(sync);
+    phone.appendChild(w);
+  }
+  root.appendChild(phone);
+}
+
+// ---------------- VARIANT B: persistent dashboard rail ----------------
+function renderB(root) {
+  const phone = el('div', 'phone');
+  const rail = el('div', 'rail');
+  rail.innerHTML = `<span><span class="dot" style="background:#51cf66"></span>BLE connected</span>
+    <span class="pid" style="color:#adb5bd">TN-VLR-04821 · 45–54 · block 3</span>
+    <span>${scene === 'result' || scene === 'retake' ? '📥 queued' : ''}</span>`;
+  phone.appendChild(rail);
+  const body = el('div', 'body');
+
+  if (scene === 'patient') {
+    const c = el('div', 'card');
+    c.innerHTML = `<b>Session</b><div class="ta" style="margin-top:6px">புதிய நோயாளியா, முன்பே பதிவு செய்யப்பட்டவரா?</div><div class="en">New or returning patient?</div>`;
+    const row = el('div'); row.style.cssText = 'display:flex;gap:8px;margin-top:10px';
+    row.appendChild(el('button', null, 'New')); row.appendChild(el('button', null, 'Look up ID'));
+    c.appendChild(row);
+    body.appendChild(c);
+  } else if (scene === 'connect') {
+    const c = el('div', 'card');
+    c.innerHTML = `<b>Sensor</b><div style="margin-top:6px;font-size:0.85rem">✅ Paired — ESP32-70:4b:ca<br>⏳ Lead check in progress</div>`;
+    body.appendChild(c);
+  } else if (scene === 'capturing' || scene === 'capturing_interrupt') {
+    const c = el('div', 'card');
+    c.innerHTML = `<b>Capturing</b> — ${scene === 'capturing' ? '16s / 30s' : '22s / 30s'}
+      <div class="waveform" style="margin-top:8px"></div>`;
+    if (scene === 'capturing_interrupt') {
+      const w = el('div'); w.style.cssText = 'margin-top:8px;background:#fff3bf;padding:6px 10px;border-radius:6px;font-size:0.78rem';
+      w.textContent = '⚠️ Motion detected mid-capture — window will be discarded';
+      c.appendChild(w);
+    }
+    body.appendChild(c);
+  } else if (scene === 'retake') {
+    const key = RETAKE_REASONS[retakeReasonIdx];
+    const r = reasonText(key);
+    const c = el('div', 'card retake');
+    c.innerHTML = `<b>↻ Could not read this attempt</b>
+      <div class="ta" style="margin-top:6px">${fillTemplate(r.ta, {sqi:'38'})}</div>
+      <div class="en">${fillTemplate(r.en, {sqi:'38'})}</div>`;
+    c.appendChild(playBtn(() => playKey(key, {sqi:'38'})));
+    const retry = el('button', null, 'Try again'); retry.style.cssText = 'display:block;margin-top:10px';
+    c.appendChild(retry);
+    body.appendChild(c);
+  } else if (scene === 'result') {
+    const sc = RESULT_SCENARIOS[resultTier];
+    const tier = STRINGS.tiers[sc.tier];
+    const c = el('div', 'card');
+    const badge = el('span', 'badge', TIER_ICON[sc.tier] + ' ' + sc.tier + ' — ' + TIER_TIMEFRAME[sc.tier]);
+    badge.style.background = TIER_COLOR[sc.tier];
+    c.appendChild(badge);
+    const taLine = el('div', 'ta', tier.ta); taLine.style.marginTop = '8px';
+    c.appendChild(taLine);
+    c.appendChild(el('div', 'en', tier.en));
+    c.appendChild(playBtn(() => playTier(sc.tier)));
+    const ul = el('ul', 'reasons');
+    sc.reasons.forEach(([key, values]) => {
+      const r = reasonText(key);
+      const li = el('li');
+      li.innerHTML = `${fillTemplate(r.ta, values)}<br><span class="en">${fillTemplate(r.en, values)}</span> `;
+      li.appendChild(playBtn(() => playKey(key, values), ''));
+      ul.appendChild(li);
+    });
+    c.appendChild(ul);
+    const supp = el('div', 'en', STRINGS.tiers.SUPPORTING_LINE.en); supp.style.marginTop = '10px';
+    c.appendChild(supp);
+    body.appendChild(c);
+  }
+  phone.appendChild(body);
+  root.appendChild(phone);
+}
+
+// ---------------- VARIANT C: append-only conversational log ----------------
+function renderC(root) {
+  const phone = el('div', 'phone');
+  const log = el('div', 'log');
+  function sys(text) { log.appendChild(el('div', 'bubble sys', text)); }
+  function bubble(cls, html) { const b = el('div', 'bubble ' + (cls||'')); b.innerHTML = html; log.appendChild(b); return b; }
+
+  sys('Session started — TN-VLR-04821 · 45–54 · block 3');
+  const order = ['patient', 'connect', 'capturing', 'capturing_interrupt', 'retake', 'result'];
+  const upto = order.indexOf(scene);
+
+  if (upto >= order.indexOf('patient')) bubble(null, 'புதிய நோயாளி பதிவு தொடங்கப்பட்டது<br><span class="en">New patient session opened</span>');
+  if (upto >= order.indexOf('connect')) bubble(null, '✅ சென்சார் இணைக்கப்பட்டது<br><span class="en">Sensor connected — ESP32-70:4b:ca</span>');
+  if (scene === 'capturing') bubble(null, '⏺ பதிவு செய்யப்படுகிறது… 16 / 30s<div class="waveform" style="margin-top:6px"></div>');
+  if (scene === 'capturing_interrupt') {
+    bubble(null, '⏺ பதிவு செய்யப்படுகிறது… 22 / 30s<div class="waveform" style="margin-top:6px"></div>');
+    bubble('retake', '⚠️ அசைவு கண்டறியப்பட்டது<br><span class="en">Motion detected — this window will be discarded</span>');
+  }
+  if (scene === 'retake') {
+    if (upto > order.indexOf('capturing_interrupt') || true) bubble(null, '⏺ பதிவு முடிந்தது<br><span class="en">Capture finished</span>');
+    const key = RETAKE_REASONS[retakeReasonIdx];
+    const r = reasonText(key);
+    const b = bubble('retake', `↻ ${fillTemplate(r.ta, {sqi:'38'})}<br><span class="en">${fillTemplate(r.en, {sqi:'38'})}</span>`);
+    b.appendChild(playBtn(() => playKey(key, {sqi:'38'})));
+    const retry = el('button', null, 'மீண்டும் / Try again'); retry.style.marginTop = '6px'; retry.style.display='block';
+    b.appendChild(retry);
+    sys('This attempt did not produce a reading — nothing was scored');
+  }
+  if (scene === 'result') {
+    bubble(null, '⏺ பதிவு முடிந்தது<br><span class="en">Capture finished</span>');
+    const sc = RESULT_SCENARIOS[resultTier];
+    const tier = STRINGS.tiers[sc.tier];
+    const b = bubble('result', `${TIER_ICON[sc.tier]} <b>${tier.ta}</b><br><span class="en">${tier.en}</span>`);
+    b.style.setProperty('--tier', TIER_COLOR[sc.tier]);
+    b.appendChild(playBtn(() => playTier(sc.tier)));
+    const thread = el('div', 'thread'); thread.innerHTML = '<b>ஏன்? / Why?</b>';
+    sc.reasons.forEach(([key, values]) => {
+      const r = reasonText(key);
+      const line = el('div'); line.style.marginTop = '4px';
+      line.innerHTML = `${fillTemplate(r.ta, values)} <span class="en">— ${fillTemplate(r.en, values)}</span>`;
+      thread.appendChild(line);
+    });
+    b.appendChild(thread);
+    sys(STRINGS.tiers.SUPPORTING_LINE.en);
+    sys('📥 Saved offline — will sync when a network is available');
+  }
+  phone.appendChild(log);
+  root.appendChild(phone);
+}
+
+// ---------------- shell: scene picker, switcher, sub-pickers ----------------
+function renderScenePicker() {
+  const sp = document.getElementById('scenepicker');
+  sp.innerHTML = '';
+  const scenes = [['patient','1 Patient'], ['connect','2 Connect'], ['capturing','3 Capturing'], ['capturing_interrupt','3b Interrupt'], ['retake','5 Retake'], ['result','4 Result']];
+  scenes.forEach(([key, label]) => {
+    const b = el('button', key === scene ? 'active' : '', label);
+    b.onclick = () => { scene = key; writeParams(); render(); };
+    sp.appendChild(b);
+  });
+  if (scene === 'retake') {
+    const sub = el('div', 'subpicker');
+    RETAKE_REASONS.forEach((key, i) => {
+      const b = el('button', i === retakeReasonIdx ? 'active' : '', key.replace('why.retake.',''));
+      b.onclick = () => { retakeReasonIdx = i; writeParams(); render(); };
+      sub.appendChild(b);
+    });
+    sp.appendChild(sub);
+  }
+  if (scene === 'result') {
+    const sub = el('div', 'subpicker');
+    Object.keys(RESULT_SCENARIOS).forEach(t => {
+      const b = el('button', t === resultTier ? 'active' : '', t);
+      b.onclick = () => { resultTier = t; writeParams(); render(); };
+      sub.appendChild(b);
+    });
+    sp.appendChild(sub);
+  }
+}
+const VARIANTS = { A: ['A — Full-screen wizard takeover', renderA], B: ['B — Persistent status rail', renderB], C: ['C — Append-only log / transcript', renderC] };
+function renderSwitcher() {
+  const keys = Object.keys(VARIANTS);
+  const sw = document.getElementById('switcher');
+  sw.innerHTML = '';
+  const left = el('button', null, '←');
+  left.onclick = () => { const i = keys.indexOf(variant); variant = keys[(i - 1 + keys.length) % keys.length]; writeParams(); render(); };
+  const label = el('div', 'label', VARIANTS[variant][0]);
+  const right = el('button', null, '→');
+  right.onclick = () => { const i = keys.indexOf(variant); variant = keys[(i + 1) % keys.length]; writeParams(); render(); };
+  sw.appendChild(left); sw.appendChild(label); sw.appendChild(right);
+}
+document.addEventListener('keydown', e => {
+  if (['INPUT','TEXTAREA'].includes(e.target.tagName) || e.target.isContentEditable) return;
+  const keys = Object.keys(VARIANTS);
+  if (e.key === 'ArrowLeft') { const i = keys.indexOf(variant); variant = keys[(i - 1 + keys.length) % keys.length]; writeParams(); render(); }
+  if (e.key === 'ArrowRight') { const i = keys.indexOf(variant); variant = keys[(i + 1) % keys.length]; writeParams(); render(); }
+});
+
+function render() {
+  document.body.className = variant;
+  renderScenePicker();
+  renderSwitcher();
+  const stage = document.getElementById('stage');
+  stage.innerHTML = '';
+  VARIANTS[variant][1](stage);
+}
+
+async function main() {
+  [STRINGS, MANIFEST] = await Promise.all([
+    fetch('../app/src/main/assets/strings/tamil_strings_DRAFT.json').then(r => r.json()),
+    fetch('../app/src/main/assets/strings/tamil_audio_manifest_DRAFT.json').then(r => r.json()),
+  ]);
+  readParams();
+  render();
+}
+main().catch(e => document.body.insertAdjacentHTML('afterbegin', `<div style="color:red;padding:8px">Failed to load: ${e.message}. Serve over http, not file://.</div>`));
+</script>
+</body>
+</html>
