@@ -29,12 +29,6 @@ wastes a clinician's afternoon on a signal it should have refused to read.
 
 Nothing on the market is built for that constraint. ArogyaX is.
 
-> [!IMPORTANT]
-> **It never displays a diagnosis.** The output is a referral colour and a timeframe —
-> nothing else. A screening tool that prints "atrial fibrillation" on a phone screen has
-> quietly promoted itself to a clinician's job. The strings "atrial fibrillation", "AF",
-> and "arrhythmia" are structurally absent from every worker-facing surface — checked by
-> a running test, not a style guide.
 
 ---
 
